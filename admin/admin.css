@@ -113,6 +113,24 @@ body.admin-sidebar-collapsed {
   text-decoration: none;
   border-radius: 8px;
   padding: 9px 10px;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.admin-nav-parent:hover,
+.admin-nav-parent.active {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+}
+
+.admin-nav-parent.active .admin-nav-mark {
+  background: #f4a621;
+  color: #10253a;
 }
 
 .admin-nav-arrow {
@@ -127,11 +145,15 @@ body.admin-sidebar-collapsed {
 }
 
 .admin-sub-nav {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 4px;
   padding-left: 24px;
   padding-top: 4px;
+}
+
+.admin-nav-group.open .admin-sub-nav {
+  display: flex;
 }
 
 .admin-sub-item {
