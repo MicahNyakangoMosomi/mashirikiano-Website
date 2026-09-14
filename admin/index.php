@@ -170,7 +170,8 @@ $memberStats = $pdo->query(
 
 $transactionStats = $pdo->query(
     "SELECT
-        COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount ELSE 0 END), 0) AS TotalSavings,
+    COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount ELSE 0 END), 0) AS TotalContributing,
+    COALESCE(SUM(CASE WHEN TransactionType = 'withdrawal' THEN Amount ELSE 0 END), 0) AS TotalWithdrawals,
         COALESCE(SUM(CASE WHEN TransactionType = 'deposit' THEN Amount ELSE 0 END), 0) AS TotalDeposits,
         COALESCE(SUM(CASE WHEN TransactionType = 'contribution' AND DATE_FORMAT(COALESCE(TranTime, CreatedAt), '%Y-%m') = DATE_FORMAT(CURRENT_DATE(), '%Y-%m') THEN Amount ELSE 0 END), 0) AS ThisMonthSavings
      FROM member_transactions"
@@ -193,14 +194,17 @@ $loanStats = $pdo->query(
 $totalMembers = (int)($memberStats['TotalMembers'] ?? 0);
 $activeMembers = (int)($memberStats['ActiveMembers'] ?? 0);
 $pendingMembers = (int)($memberStats['PendingMembers'] ?? 0);
-$totalSavings = (float)($transactionStats['TotalSavings'] ?? 0);
+$totalContributing = (float)($transactionStats['TotalContributing'] ?? 0);
+$totalWithdrawals = (float)($transactionStats['TotalWithdrawals'] ?? 0);
+$netSavings = max(0.0, $totalContributing - $totalWithdrawals);
+$withdrawalRate = $totalContributing > 0 ? min(100, ($totalWithdrawals / $totalContributing) * 100) : 0;
 $shareCapital = (float)($depositStats['ShareCapital'] ?? 0);
 $activeLoans = (int)($loanStats['ActiveLoans'] ?? 0);
 $loanPortfolio = (float)($loanStats['LoanPortfolio'] ?? 0);
 $pendingLoans = (int)($loanStats['PendingLoans'] ?? 0);
 $thisMonthSavings = (float)($transactionStats['ThisMonthSavings'] ?? 0);
 $thisMonthDisbursed = (float)($loanStats['ThisMonthDisbursed'] ?? 0);
-$coverageRate = $loanPortfolio > 0 ? min(999, ($totalSavings / $loanPortfolio) * 100) : 0;
+$coverageRate = $loanPortfolio > 0 ? min(999, ($netSavings / $loanPortfolio) * 100) : 0;
 $activeMemberRate = $totalMembers > 0 ? ($activeMembers / $totalMembers) * 100 : 0;
 
 $months = monthBuckets();
@@ -384,9 +388,14 @@ $months = hydrateMonthly(
         <div class="bi-metric-note"><?= number_format($activeMembers) ?> active, <?= number_format($pendingMembers) ?> pending</div>
       </div>
       <div class="bi-metric">
-        <div class="bi-metric-label">Total Savings</div>
-        <div class="bi-metric-value"><?= e(moneyShort($totalSavings)) ?></div>
+        <div class="bi-metric-label">Total Contributions</div>
+        <div class="bi-metric-value"><?= e(moneyShort($totalContributing)) ?></div>
         <div class="bi-metric-note"><?= e(moneyShort($thisMonthSavings)) ?> saved this month</div>
+      </div>
+      <div class="bi-metric blue">
+        <div class="bi-metric-label">Net Savings</div>
+        <div class="bi-metric-value"><?= e(moneyShort($netSavings)) ?></div>
+        <div class="bi-metric-note">Contributing less withdrawals</div>
       </div>
       <div class="bi-metric purple">
         <div class="bi-metric-label">Share Capital</div>
@@ -435,7 +444,7 @@ $months = hydrateMonthly(
             <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
               <h2>Savings and Loan Disbursements (12 Months)</h2>
               <div class="chart-legend">
-                <span><span class="legend-dot" style="background:#218c74;"></span>Savings</span>
+                <span><span class="legend-dot" style="background:#218c74;"></span>Contributions</span>
                 <span><span class="legend-dot" style="background:#f97316;"></span>Loans</span>
               </div>
             </div>
@@ -444,6 +453,29 @@ $months = hydrateMonthly(
         </div>
       </section>
     </div>
+
+    <section class="card chart-card mt-4">
+      <div class="card-body">
+        <h2 class="mb-3">Savings Position Analysis</h2>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="text-muted small">Total Withdrawals</div>
+            <div class="h4 fw-bold mb-1"><?= e(moneyShort($totalWithdrawals)) ?></div>
+            <div class="text-muted small">Cash released from contributions</div>
+          </div>
+          <div class="col-md-4">
+            <div class="text-muted small">Savings Retained</div>
+            <div class="h4 fw-bold mb-1"><?= number_format(max(0, 100 - $withdrawalRate), 1) ?>%</div>
+            <div class="text-muted small">Share of contributions still retained</div>
+          </div>
+          <div class="col-md-4">
+            <div class="text-muted small">Withdrawal Rate</div>
+            <div class="h4 fw-bold mb-1"><?= number_format($withdrawalRate, 1) ?>%</div>
+            <div class="text-muted small">Withdrawals compared with contributions</div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>

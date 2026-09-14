@@ -67,6 +67,18 @@ return [
     ],
 
     /**
+     * TRANSACTION MIRROR DATABASE
+     * This database contains only the transaction mirror table.
+     */
+    'transaction_db' => [
+        'host'    => env('TRANSACTION_DB_HOST', env('DB_HOST')),
+        'name'    => env('TRANSACTION_DB_NAME', 'mashirikiano_sacco_transctions'),
+        'user'    => env('TRANSACTION_DB_USER', env('DB_USER')),
+        'pass'    => env('TRANSACTION_DB_PASS', env('DB_PASS')),
+        'charset' => env('TRANSACTION_DB_CHARSET', env('DB_CHARSET', 'utf8mb4')),
+    ],
+
+    /**
      * APPLICATION CONFIG
      */
     'app' => [

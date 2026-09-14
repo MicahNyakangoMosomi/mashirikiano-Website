@@ -64,7 +64,7 @@ if (($_GET['download'] ?? '') === 'pdf') {
     SimplePdfTable::download(
         'members-report.pdf',
         'Members Report',
-        ['MemberID', 'Name', 'Phone', 'Email', 'NationalID', 'Status', 'Deposit Bal.', 'Created', 'Contributions'],
+        ['MemberID', 'Name', 'Phone', 'Email', 'NationalID', 'Status', 'Deposit Bal.', 'Created', 'Contributions', 'Net Savings'],
         array_map(static function (array $member): array {
             return [
                 (string)$member['MemberID'],
@@ -76,6 +76,7 @@ if (($_GET['download'] ?? '') === 'pdf') {
                 number_format((float)($member['Balance'] ?? 0), 2),
                 (string)$member['CreatedAt'],
                 number_format((float)$member['TotalContributions'], 2),
+                number_format((float)$member['NetSavings'], 2),
             ];
         }, $pdfMembers),
         [62, 110, 76, 116, 72, 56, 68, 84, 76]
@@ -155,7 +156,9 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
     $stmt = $pdo->prepare(
         "SELECT m.*, d.RequiredAmount, d.PaidAmount, d.Balance, d.Status AS DepositStatus,
             COALESCE(totals.TotalContributions, 0) AS TotalContributions,
-            COALESCE(totals.ContributionCount, 0) AS ContributionCount
+            COALESCE(totals.ContributionCount, 0) AS ContributionCount,
+            COALESCE(withd.TotalWithdrawals, 0) AS TotalWithdrawals,
+            (COALESCE(totals.TotalContributions, 0) - COALESCE(withd.TotalWithdrawals, 0)) AS NetSavings
          FROM members m
          LEFT JOIN deposits d ON d.MemberID = m.MemberID
          LEFT JOIN (
@@ -164,6 +167,12 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
             WHERE MemberID IS NOT NULL AND TransactionType = 'contribution'
             GROUP BY MemberID
          ) totals ON totals.MemberID = m.MemberID
+        LEFT JOIN (
+          SELECT MemberID, SUM(Amount) AS TotalWithdrawals
+          FROM member_transactions
+          WHERE MemberID IS NOT NULL AND TransactionType = 'withdrawal'
+          GROUP BY MemberID
+        ) withd ON withd.MemberID = m.MemberID
          {$whereSql}
          ORDER BY m.FirstName ASC, m.LastName ASC, m.MemberID ASC
          LIMIT {$limit} OFFSET {$offset}"
@@ -246,6 +255,7 @@ function renderMemberRows(array $members): string
         <td><?= number_format((float)($member['Balance'] ?? 0), 2) ?></td>
         <td><?= e($member['CreatedAt']) ?></td>
         <td class="text-end"><?= number_format((float)$member['TotalContributions'], 2) ?></td>
+        <td class="text-end fw-semibold"><?= number_format(max(0, (float)$member['NetSavings']), 2) ?></td>
         <td class="actions-cell text-end">
           <a href="edit_member.php?id=<?= urlencode($member['MemberID']) ?>">Edit</a>
           <a href="#" data-bs-toggle="modal" data-bs-target="#memberContributions<?= e($member['MemberID']) ?>">Contributions</a>
@@ -254,7 +264,7 @@ function renderMemberRows(array $members): string
     <?php endforeach;
 
     if (!$members): ?>
-      <tr><td colspan="10" class="text-muted">No members match that name or MemberID.</td></tr>
+      <tr><td colspan="11" class="text-muted">No members match that name or MemberID.</td></tr>
     <?php endif;
 
     return trim((string)ob_get_clean());
@@ -430,7 +440,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         </div>
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end">Total Contributions</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end">Total Contributions</th><th class="text-end">Net Savings</th><th class="text-end">Actions</th></tr></thead>
             <tbody id="membersTableBody">
               <?= renderMemberRows($members) ?>
             </tbody>
@@ -535,7 +545,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         })
         .catch(function (error) {
           if (error.name !== 'AbortError') {
-            membersTableBody.innerHTML = '<tr><td colspan="10" class="text-danger">Unable to load members right now.</td></tr>';
+            membersTableBody.innerHTML = '<tr><td colspan="11" class="text-danger">Unable to load members right now.</td></tr>';
           }
         });
     }
