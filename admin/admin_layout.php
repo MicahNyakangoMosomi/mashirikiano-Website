@@ -17,6 +17,7 @@ if (!function_exists('admin_header')) {
             'reports' => ['Reports', 'reports.php'],
             'members' => ['Members', 'members.php'],
             'loan_applications' => ['Loan Applications', 'loan_applications.php'],
+            'withdrawals' => ['Withdrawals', 'withdrawals.php'],
             'settings' => ['Settings', 'settings.php'],
         ];
         $shellClass = $wide ? 'admin-shell' : 'admin-shell admin-shell--narrow';
