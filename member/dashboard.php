@@ -97,11 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_loan'])) {
 }
 
 // Fetch totals & dashboard info
-$totalStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) AS Total FROM member_transactions WHERE MemberID = :member_id AND TransactionType = 'contribution'");
+$totalStmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount WHEN TransactionType = 'withdrawal' THEN -Amount ELSE 0 END), 0) AS Total FROM member_transactions WHERE MemberID = :member_id");
 $totalStmt->execute([':member_id' => $member['MemberID']]);
-$total = (float) $totalStmt->fetchColumn();
+$total = max(0.00, (float) $totalStmt->fetchColumn());
 
-$recentStmt = $pdo->prepare("SELECT * FROM member_transactions WHERE MemberID = :member_id AND TransactionType = 'contribution' ORDER BY COALESCE(TranTime, CreatedAt) DESC LIMIT 8");
+$recentStmt = $pdo->prepare("SELECT * FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal') ORDER BY COALESCE(TranTime, CreatedAt) DESC LIMIT 8");
 $recentStmt->execute([':member_id' => $member['MemberID']]);
 $recentTransactions = $recentStmt->fetchAll();
 
@@ -130,7 +130,7 @@ if ($dateTo !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
     $dateTo = '';
 }
 
-$recordWhere = "WHERE MemberID = :member_id AND TransactionType = 'contribution'";
+$recordWhere = "WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal')";
 $recordParams = [':member_id' => $member['MemberID']];
 
 if ($transactionIdSearch !== '') {

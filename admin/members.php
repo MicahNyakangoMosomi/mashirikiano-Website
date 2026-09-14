@@ -207,7 +207,9 @@ function loadMembersForPdf(PDO $pdo, string $search): array
 
     $stmt = $pdo->prepare(
         "SELECT m.*, d.Balance,
-            COALESCE(totals.TotalContributions, 0) AS TotalContributions
+            COALESCE(totals.TotalContributions, 0) AS TotalContributions,
+            COALESCE(withd.TotalWithdrawals, 0) AS TotalWithdrawals,
+            (COALESCE(totals.TotalContributions, 0) - COALESCE(withd.TotalWithdrawals, 0)) AS NetSavings
          FROM members m
          LEFT JOIN deposits d ON d.MemberID = m.MemberID
          LEFT JOIN (
@@ -216,6 +218,12 @@ function loadMembersForPdf(PDO $pdo, string $search): array
             WHERE MemberID IS NOT NULL AND TransactionType = 'contribution'
             GROUP BY MemberID
          ) totals ON totals.MemberID = m.MemberID
+         LEFT JOIN (
+            SELECT MemberID, SUM(Amount) AS TotalWithdrawals
+            FROM member_transactions
+            WHERE MemberID IS NOT NULL AND TransactionType = 'withdrawal'
+            GROUP BY MemberID
+         ) withd ON withd.MemberID = m.MemberID
          {$whereSql}
          ORDER BY m.FirstName ASC, m.LastName ASC, m.MemberID ASC"
     );
