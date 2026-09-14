@@ -11,14 +11,21 @@ if (!function_exists('admin_header')) {
     function admin_header(string $active, string $subtitle = '', bool $wide = true): void
     {
         $links = [
-            'dashboard' => ['Dashboard', 'index.php'],
-            'register_member' => ['Register Member', 'register_member.php'],
-            'manage_jobs' => ['Manage Jobs', 'manage_jobs.php'],
-            'reports' => ['Reports', 'reports.php'],
-            'members' => ['Members', 'members.php'],
-            'loan_applications' => ['Loan Applications', 'loan_applications.php'],
-            'withdrawals' => ['Withdrawals', 'withdrawals.php'],
-            'settings' => ['Settings', 'settings.php'],
+            'dashboard' => ['label' => 'Dashboard', 'url' => 'index.php'],
+            'register_member' => ['label' => 'Register Member', 'url' => 'register_member.php'],
+            'manage_jobs' => ['label' => 'Manage Jobs', 'url' => 'manage_jobs.php'],
+            'reports' => ['label' => 'Reports', 'url' => 'reports.php'],
+            'members' => ['label' => 'Members', 'url' => 'members.php'],
+            'loan_applications' => ['label' => 'Loan Applications', 'url' => 'loan_applications.php'],
+            'withdrawals' => [
+                'label' => 'Withdrawals',
+                'url' => 'withdrawals.php',
+                'sub' => [
+                    'withdraw' => ['label' => 'Withdraw', 'url' => 'withdrawals.php'],
+                    'withdrawal_logs' => ['label' => 'Withdrawal Logs', 'url' => 'withdrawal_logs.php'],
+                ]
+            ],
+            'settings' => ['label' => 'Settings', 'url' => 'settings.php'],
         ];
         $shellClass = $wide ? 'admin-shell' : 'admin-shell admin-shell--narrow';
         ?>
@@ -32,10 +39,31 @@ if (!function_exists('admin_header')) {
           </div>
           <nav class="admin-side-nav">
             <?php foreach ($links as $key => $link): ?>
-              <a class="<?= $active === $key ? 'active' : '' ?>" href="<?= admin_e($link[1]) ?>">
-                <span class="admin-nav-mark"><?= admin_e(substr($link[0], 0, 1)) ?></span>
-                <span class="admin-nav-label"><?= admin_e($link[0]) ?></span>
-              </a>
+              <?php if (isset($link['sub'])): ?>
+                <?php
+                  $isSubActive = ($active === $key || isset($link['sub'][$active]));
+                ?>
+                <div class="admin-nav-group <?= $isSubActive ? 'open' : '' ?>">
+                  <a class="admin-nav-parent <?= $isSubActive ? 'active' : '' ?>" href="<?= admin_e($link['url']) ?>">
+                    <span class="admin-nav-mark"><?= admin_e(substr($link['label'], 0, 1)) ?></span>
+                    <span class="admin-nav-label flex-grow-1"><?= admin_e($link['label']) ?></span>
+                    <span class="admin-nav-arrow">&#9662;</span>
+                  </a>
+                  <div class="admin-sub-nav">
+                    <?php foreach ($link['sub'] as $subKey => $subLink): ?>
+                      <a class="admin-sub-item <?= $active === $subKey ? 'active' : '' ?>" href="<?= admin_e($subLink['url']) ?>">
+                        <span class="admin-sub-bullet">&bull;</span>
+                        <span class="admin-nav-label"><?= admin_e($subLink['label']) ?></span>
+                      </a>
+                    <?php endforeach; ?>
+                  </div>
+                </div>
+              <?php else: ?>
+                <a class="<?= $active === $key ? 'active' : '' ?>" href="<?= admin_e($link['url'] ?? $link[1]) ?>">
+                  <span class="admin-nav-mark"><?= admin_e(substr($link['label'] ?? $link[0], 0, 1)) ?></span>
+                  <span class="admin-nav-label"><?= admin_e($link['label'] ?? $link[0]) ?></span>
+                </a>
+              <?php endif; ?>
             <?php endforeach; ?>
           </nav>
         </aside>

@@ -165,33 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
     }
 }
 
-// PDF Export for Withdrawals History
-if (($_GET['download'] ?? '') === 'pdf') {
-    $pdfStmt = $pdo->query("SELECT w.*, m.FirstName, m.LastName, m.NationalID, m.PrimaryNumber
-        FROM withdrawals w
-        JOIN members m ON m.MemberID = w.MemberID
-        ORDER BY w.WithdrawalDate DESC");
-    $withdrawalsPdf = $pdfStmt->fetchAll();
-
-    SimplePdfTable::download(
-        'withdrawals-report.pdf',
-        'SACCO Member Withdrawals Report',
-        ['Ref #', 'Member ID', 'Member Name', 'National ID', 'Amount (KES)', 'Date', 'Description'],
-        array_map(static function (array $w): array {
-            return [
-                'WD-' . $w['WithdrawalID'],
-                (string)$w['MemberID'],
-                trim($w['FirstName'] . ' ' . $w['LastName']),
-                (string)$w['NationalID'],
-                number_format((float)$w['Amount'], 2),
-                date('Y-m-d H:i', strtotime($w['WithdrawalDate'])),
-                (string)($w['Description'] ?: 'Member Withdrawal')
-            ];
-        }, $withdrawalsPdf),
-        [50, 75, 120, 75, 80, 90, 110]
-    );
-}
-
 // Filtering & Pagination for Active Members
 $search = trim($_GET['search'] ?? '');
 $page = max(1, (int)($_GET['page'] ?? 1));
@@ -251,26 +224,6 @@ $allContributions = (float)($summaryStats['TotalContributions'] ?? 0);
 $allWithdrawals = (float)($summaryStats['TotalWithdrawals'] ?? 0);
 $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
 
-// Recent Withdrawals Query (Pagination for History)
-$wPage = max(1, (int)($_GET['wpage'] ?? 1));
-$wLimit = 10;
-$wCountStmt = $pdo->query("SELECT COUNT(*) FROM withdrawals");
-$totalWithdrawalRecords = (int)$wCountStmt->fetchColumn();
-$wTotalPages = max(1, (int)ceil($totalWithdrawalRecords / $wLimit));
-$wPage = min($wPage, $wTotalPages);
-$wOffset = ($wPage - 1) * $wLimit;
-
-$historyStmt = $pdo->prepare("
-    SELECT w.*, m.FirstName, m.LastName, m.NationalID, m.PrimaryNumber, au.FullName AS AdminName
-    FROM withdrawals w
-    JOIN members m ON m.MemberID = w.MemberID
-    LEFT JOIN admin_users au ON au.AdminUserID = w.AdminUserID
-    ORDER BY w.WithdrawalDate DESC
-    LIMIT {$wLimit} OFFSET {$wOffset}
-");
-$historyStmt->execute();
-$withdrawalHistory = $historyStmt->fetchAll();
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -293,7 +246,7 @@ $withdrawalHistory = $historyStmt->fetchAll();
 </head>
 <body>
 
-  <?php admin_header('withdrawals', 'Member Withdrawals & Savings Management'); ?>
+  <?php admin_header('withdraw', 'Member Cash Withdrawal Processing'); ?>
 
   <main class="container-fluid admin-shell py-4">
 
@@ -467,80 +420,17 @@ $withdrawalHistory = $historyStmt->fetchAll();
     </div>
 
 
-    <!-- Withdrawals History Table Section -->
-    <div class="card shadow-sm border-0">
-      <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
+    <!-- Link Banner to Withdrawal Logs -->
+    <div class="card shadow-sm border-0 bg-white p-4">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
-          <h2 class="h5 mb-0 fw-bold text-dark"><i class="bi bi-clock-history text-danger me-2"></i>Recorded Withdrawals Log</h2>
-          <div class="text-muted small">Comprehensive record of all processed member cash withdrawals.</div>
+          <h3 class="h6 fw-bold mb-1 text-dark"><i class="bi bi-clock-history text-danger me-2"></i>Looking for past withdrawal records & PDF reports?</h3>
+          <p class="text-muted small mb-0">View the complete audit trail, search past transactions, and download official PDF reports in Withdrawal Logs.</p>
         </div>
-        <a href="withdrawals.php?download=pdf" class="btn btn-sm btn-outline-danger">
-          <i class="bi bi-file-earmark-pdf me-1"></i> Export PDF Report
+        <a href="withdrawal_logs.php" class="btn btn-outline-danger fw-semibold px-4 shadow-sm">
+          <i class="bi bi-journal-text me-1"></i> Open Withdrawal Logs & PDF Export
         </a>
       </div>
-
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover table-custom align-middle mb-0">
-            <thead>
-              <tr>
-                <th class="ps-3">Ref ID</th>
-                <th>Member ID</th>
-                <th>Member Name</th>
-                <th>National ID</th>
-                <th class="text-end">Amount Withdrawn</th>
-                <th>Withdrawal Date</th>
-                <th>Description</th>
-                <th>Processed By</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (empty($withdrawalHistory)): ?>
-                <tr>
-                  <td colspan="8" class="text-center py-4 text-muted">
-                    No withdrawals recorded yet.
-                  </td>
-                </tr>
-              <?php else: ?>
-                <?php foreach ($withdrawalHistory as $w): ?>
-                  <tr>
-                    <td class="ps-3 fw-bold text-secondary">WD-<?= (int)$w['WithdrawalID'] ?></td>
-                    <td class="fw-semibold text-primary"><?= e($w['MemberID']) ?></td>
-                    <td class="fw-bold"><?= e(trim($w['FirstName'] . ' ' . $w['LastName'])) ?></td>
-                    <td><?= e($w['NationalID']) ?></td>
-                    <td class="text-end fw-bold text-danger font-monospace">KES <?= number_format((float)$w['Amount'], 2) ?></td>
-                    <td class="small text-muted"><i class="bi bi-calendar3 me-1"></i><?= date('d-M-Y H:i', strtotime($w['WithdrawalDate'])) ?></td>
-                    <td><?= e($w['Description'] ?: 'Member Withdrawal') ?></td>
-                    <td class="small text-muted"><?= e($w['AdminName'] ?: 'System Admin') ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- History Pagination -->
-      <?php if ($wTotalPages > 1): ?>
-        <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
-          <div class="small text-muted">Showing history page <?= $wPage ?> of <?= $wTotalPages ?></div>
-          <nav>
-            <ul class="pagination pagination-sm mb-0">
-              <li class="page-item <?= $wPage <= 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?wpage=<?= $wPage - 1 ?>&search=<?= urlencode($search) ?>">Previous</a>
-              </li>
-              <?php for ($i = 1; $i <= $wTotalPages; $i++): ?>
-                <li class="page-item <?= $i === $wPage ? 'active' : '' ?>">
-                  <a class="page-link" href="?wpage=<?= $i ?>&search=<?= urlencode($search) ?>"><?= $i ?></a>
-                </li>
-              <?php endfor; ?>
-              <li class="page-item <?= $wPage >= $wTotalPages ? 'disabled' : '' ?>">
-                <a class="page-link" href="?wpage=<?= $wPage + 1 ?>&search=<?= urlencode($search) ?>">Next</a>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      <?php endif; ?>
     </div>
 
   </main>

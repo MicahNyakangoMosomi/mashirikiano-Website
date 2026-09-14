@@ -98,6 +98,75 @@ body.admin-sidebar-collapsed {
   color: #10253a;
 }
 
+.admin-nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-nav-parent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  color: rgba(255, 255, 255, .78);
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.admin-nav-arrow {
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+.admin-nav-group.open .admin-nav-arrow {
+  transform: rotate(180deg);
+}
+
+.admin-sub-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 24px;
+  padding-top: 4px;
+}
+
+.admin-sub-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: rgba(255, 255, 255, .72);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.admin-sub-item:hover,
+.admin-sub-item.active {
+  background: rgba(255, 255, 255, .15);
+  color: #fff;
+}
+
+.admin-sub-item.active {
+  color: #f4a621;
+  font-weight: 700;
+}
+
+.admin-sub-bullet {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+body.admin-sidebar-collapsed .admin-sub-nav {
+  display: none;
+}
+
 .admin-sidebar-overlay {
   display: none;
 }
