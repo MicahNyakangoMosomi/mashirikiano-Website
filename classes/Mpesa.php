@@ -2,7 +2,6 @@
 
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/SmsService.php';
-require_once __DIR__ . '/TransactionMirror.php';
 
 /**
  * Class Mpesa
@@ -124,8 +123,6 @@ class Mpesa
             ];
         }
 
-        $mirrorPdo = TransactionDatabase::connection();
-
         // Try match member by National ID
         $member = self::findMemberByNationalId($data['NationalID']);
         $memberId = $member ? (string)$member['MemberID'] : null;
@@ -133,7 +130,6 @@ class Mpesa
         $activationSms = null;
 
         $pdo->beginTransaction();
-        $mirrorPdo->beginTransaction();
         try {
             $remaining = (float)$data['Amount'];
 
@@ -194,13 +190,8 @@ class Mpesa
                 $segments[] = ['type' => 'contribution', 'amount' => $remaining];
             }
 
-            // Commit the mirror first so a successful primary transaction has a comparison row.
-            $mirrorPdo->commit();
             $pdo->commit();
         } catch (Throwable $error) {
-            if ($mirrorPdo->inTransaction()) {
-                $mirrorPdo->rollBack();
-            }
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
@@ -307,8 +298,6 @@ class Mpesa
             ':description' => $description,
             ':tran_time' => $data['TranTime'],
         ]);
-
-        TransactionMirror::insert($data, $member, $amount, $type, $category, $description);
     }
 
     /**

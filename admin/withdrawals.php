@@ -268,9 +268,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               <div class="text-muted small text-uppercase fw-bold">Active Members</div>
               <div class="h3 fw-bold mb-0 text-primary"><?= number_format($activeCount) ?></div>
             </div>
-            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
-              <i class="bi bi-people-fill fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -281,9 +279,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               <div class="text-muted small text-uppercase fw-bold">Total Contributions</div>
               <div class="h3 fw-bold mb-0 text-success"><?= number_format($allContributions, 2) ?></div>
             </div>
-            <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
-              <i class="bi bi-piggy-bank-fill fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -294,9 +290,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               <div class="text-muted small text-uppercase fw-bold">Total Withdrawals</div>
               <div class="h3 fw-bold mb-0 text-danger"><?= number_format($allWithdrawals, 2) ?></div>
             </div>
-            <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger">
-              <i class="bi bi-arrow-up-right-circle-fill fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -307,9 +301,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               <div class="text-muted small text-uppercase fw-bold">Net Savings Pool</div>
               <div class="h3 fw-bold mb-0 text-info"><?= number_format($totalNetSavings, 2) ?></div>
             </div>
-            <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
-              <i class="bi bi-bank2 fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>

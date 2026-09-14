@@ -181,9 +181,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
               <div class="text-muted small text-uppercase fw-bold">Total Withdrawal Logs</div>
               <div class="h3 fw-bold mb-0 text-primary"><?= number_format($logsCount) ?></div>
             </div>
-            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
-              <i class="bi bi-journal-text fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -194,9 +192,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
               <div class="text-muted small text-uppercase fw-bold">Total Amount Withdrawn</div>
               <div class="h3 fw-bold mb-0 text-danger"><?= number_format($totalWithdrawn, 2) ?></div>
             </div>
-            <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger">
-              <i class="bi bi-arrow-up-right-circle-fill fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -207,9 +203,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
               <div class="text-muted small text-uppercase fw-bold">Active Members</div>
               <div class="h3 fw-bold mb-0 text-success"><?= number_format($activeCount) ?></div>
             </div>
-            <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
-              <i class="bi bi-person-check-fill fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -220,9 +214,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
               <div class="text-muted small text-uppercase fw-bold">Net Savings Pool</div>
               <div class="h3 fw-bold mb-0 text-info"><?= number_format($netSavingsPool, 2) ?></div>
             </div>
-            <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
-              <i class="bi bi-bank2 fs-4"></i>
-            </div>
+            
           </div>
         </div>
       </div>
@@ -232,7 +224,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
     <div class="card shadow-sm border-0">
       <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
         <div>
-          <h2 class="h5 mb-0 fw-bold text-dark"><i class="bi bi-clock-history text-danger me-2"></i>Member Withdrawal Logs</h2>
+          <h2 class="h5 mb-0 fw-bold text-dark">Member Withdrawal Logs</h2>
           <div class="text-muted small">Complete audit trail of member cash withdrawals and transaction records.</div>
         </div>
         <div class="d-flex flex-wrap gap-2">
