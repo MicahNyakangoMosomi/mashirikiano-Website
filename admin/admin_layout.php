@@ -44,11 +44,11 @@ if (!function_exists('admin_header')) {
                   $isSubActive = ($active === $key || isset($link['sub'][$active]));
                 ?>
                 <div class="admin-nav-group <?= $isSubActive ? 'open' : '' ?>">
-                  <a class="admin-nav-parent <?= $isSubActive ? 'active' : '' ?>" href="<?= admin_e($link['url']) ?>">
+                  <button type="button" class="admin-nav-parent admin-nav-toggle <?= $isSubActive ? 'active' : '' ?>" aria-expanded="<?= $isSubActive ? 'true' : 'false' ?>">
                     <span class="admin-nav-mark"><?= admin_e(substr($link['label'], 0, 1)) ?></span>
                     <span class="admin-nav-label flex-grow-1"><?= admin_e($link['label']) ?></span>
                     <span class="admin-nav-arrow">&#9662;</span>
-                  </a>
+                  </button>
                   <div class="admin-sub-nav">
                     <?php foreach ($link['sub'] as $subKey => $subLink): ?>
                       <a class="admin-sub-item <?= $active === $subKey ? 'active' : '' ?>" href="<?= admin_e($subLink['url']) ?>">
@@ -129,6 +129,18 @@ if (!function_exists('admin_header')) {
                 syncExpanded();
               });
             }
+
+            // Toggle logic for dropdown sub-menus
+            document.querySelectorAll('.admin-nav-toggle').forEach(function (toggleBtn) {
+              toggleBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const group = this.closest('.admin-nav-group');
+                if (group) {
+                  group.classList.toggle('open');
+                  this.setAttribute('aria-expanded', group.classList.contains('open') ? 'true' : 'false');
+                }
+              });
+            });
 
             window.addEventListener('resize', function () {
               if (!isSmallScreen()) {
