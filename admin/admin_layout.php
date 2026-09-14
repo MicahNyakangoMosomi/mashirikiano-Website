@@ -44,12 +44,12 @@ if (!function_exists('admin_header')) {
                   $isSubActive = ($active === $key || isset($link['sub'][$active]));
                 ?>
                 <div class="admin-nav-group <?= $isSubActive ? 'open' : '' ?>">
-                  <button type="button" class="admin-nav-parent admin-nav-toggle <?= $isSubActive ? 'active' : '' ?>" aria-expanded="<?= $isSubActive ? 'true' : 'false' ?>">
+                  <button type="button" class="admin-nav-parent admin-nav-toggle <?= $isSubActive ? 'active' : '' ?>" aria-expanded="<?= $isSubActive ? 'true' : 'false' ?>" aria-controls="admin-sub-nav-<?= admin_e($key) ?>">
                     <span class="admin-nav-mark"><?= admin_e(substr($link['label'], 0, 1)) ?></span>
                     <span class="admin-nav-label flex-grow-1"><?= admin_e($link['label']) ?></span>
                     <span class="admin-nav-arrow">&#9662;</span>
                   </button>
-                  <div class="admin-sub-nav">
+                  <div class="admin-sub-nav" id="admin-sub-nav-<?= admin_e($key) ?>" aria-hidden="<?= $isSubActive ? 'false' : 'true' ?>">
                     <?php foreach ($link['sub'] as $subKey => $subLink): ?>
                       <a class="admin-sub-item <?= $active === $subKey ? 'active' : '' ?>" href="<?= admin_e($subLink['url']) ?>">
                         <span class="admin-sub-bullet">&bull;</span>
@@ -136,8 +136,12 @@ if (!function_exists('admin_header')) {
                 e.preventDefault();
                 const group = this.closest('.admin-nav-group');
                 if (group) {
-                  group.classList.toggle('open');
-                  this.setAttribute('aria-expanded', group.classList.contains('open') ? 'true' : 'false');
+                  const isOpen = group.classList.toggle('open');
+                  this.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                  const submenu = group.querySelector('.admin-sub-nav');
+                  if (submenu) {
+                    submenu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+                  }
                 }
               });
             });

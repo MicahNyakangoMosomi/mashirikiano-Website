@@ -104,6 +104,12 @@ body.admin-sidebar-collapsed {
   flex-direction: column;
 }
 
+.admin-sidebar .admin-nav-parent {
+  box-sizing: border-box;
+  margin: 0;
+  line-height: 1.5;
+}
+
 /* Strip all Bootstrap btn/button defaults */
 .admin-sidebar button.admin-nav-parent,
 .admin-sidebar .admin-nav-parent {
@@ -175,6 +181,10 @@ body.admin-sidebar-collapsed {
 
 .admin-nav-group.open .admin-sub-nav {
   display: flex;
+}
+
+.admin-nav-group:not(.open) .admin-sub-nav {
+  visibility: hidden;
 }
 
 .admin-sub-item {
