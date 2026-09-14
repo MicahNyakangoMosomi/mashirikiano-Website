@@ -65,14 +65,14 @@ function e($value): string
 function moneyShort(float $amount): string
 {
     if (abs($amount) >= 1000000) {
-        return 'KES ' . number_format($amount / 1000000, 2) . 'M';
+        return number_format($amount / 1000000, 2) . 'M';
     }
 
     if (abs($amount) >= 1000) {
-        return 'KES ' . number_format($amount / 1000, 1) . 'K';
+        return number_format($amount / 1000, 1) . 'K';
     }
 
-    return 'KES ' . number_format($amount, 0);
+    return number_format($amount, 0);
 }
 
 function monthBuckets(): array

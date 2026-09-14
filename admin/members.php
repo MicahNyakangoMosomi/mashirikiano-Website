@@ -243,9 +243,9 @@ function renderMemberRows(array $members): string
         <td><?= e($member['Email'] ?: 'Not provided') ?></td>
         <td><?= e($member['NationalID']) ?></td>
         <td><span class="badge text-bg-<?= $member['Status'] === 'Active' ? 'success' : ($member['Status'] === 'Suspended' ? 'danger' : 'secondary') ?>"><?= e($member['Status']) ?></span></td>
-        <td>KES <?= number_format((float)($member['Balance'] ?? 0), 2) ?></td>
+        <td><?= number_format((float)($member['Balance'] ?? 0), 2) ?></td>
         <td><?= e($member['CreatedAt']) ?></td>
-        <td class="text-end">KES <?= number_format((float)$member['TotalContributions'], 2) ?></td>
+        <td class="text-end"><?= number_format((float)$member['TotalContributions'], 2) ?></td>
         <td class="actions-cell text-end">
           <a href="edit_member.php?id=<?= urlencode($member['MemberID']) ?>">Edit</a>
           <a href="#" data-bs-toggle="modal" data-bs-target="#memberContributions<?= e($member['MemberID']) ?>">Contributions</a>
@@ -278,7 +278,7 @@ function renderMemberModals(array $members, array $memberContributions): string
               <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
                 <div>
                   <div class="text-muted small">Total Contributions</div>
-                  <div class="h4 fw-bold">KES <?= number_format((float)$member['TotalContributions'], 2) ?></div>
+                  <div class="h4 fw-bold"><?= number_format((float)$member['TotalContributions'], 2) ?></div>
                 </div>
                 <div>
                   <div class="text-muted small">Contribution Records</div>
@@ -294,7 +294,7 @@ function renderMemberModals(array $members, array $memberContributions): string
                         <td><?= e($contribution['TranID']) ?></td>
                         <td><?= e($contribution['TranTime'] ?: $contribution['CreatedAt']) ?></td>
                         <td><?= e($contribution['MSISDN']) ?></td>
-                        <td class="text-end">KES <?= number_format((float)$contribution['Amount'], 2) ?></td>
+                        <td class="text-end"><?= number_format((float)$contribution['Amount'], 2) ?></td>
                       </tr>
                     <?php endforeach; ?>
                     <?php if (empty($memberContributions[$member['MemberID']])): ?>
@@ -389,10 +389,10 @@ function renderPagination(int $currentPage, int $totalPages): string
         <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Pending Members</div><div class="h3 fw-bold mb-0"><?= (int)$stats['PendingMembers'] ?></div></div></div>
       </div>
       <div class="col-md-4 col-xl">
-        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Contributions</div><div class="h3 fw-bold mb-0">KES <?= number_format((float)$contributionStats['TotalContributions'], 2) ?></div></div></div>
+        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Contributions</div><div class="h3 fw-bold mb-0"><?= number_format((float)$contributionStats['TotalContributions'], 2) ?></div></div></div>
       </div>
       <div class="col-md-4 col-xl">
-        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Deposits</div><div class="h3 fw-bold mb-0">KES <?= number_format((float)$depositStats['TotalDeposits'], 2) ?></div></div></div>
+        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Deposits</div><div class="h3 fw-bold mb-0"><?= number_format((float)$depositStats['TotalDeposits'], 2) ?></div></div></div>
       </div>
     </div>
 
@@ -452,7 +452,7 @@ function renderPagination(int $currentPage, int $totalPages): string
                   <td><?= e(trim($row['FirstName'] . ' ' . $row['LastName'])) ?></td>
                   <td><?= e($row['MSISDN']) ?></td>
                   <td><?= (int)$row['ContributionCount'] ?></td>
-                  <td class="text-end">KES <?= number_format((float)$row['TotalAmount'], 2) ?></td>
+                  <td class="text-end"><?= number_format((float)$row['TotalAmount'], 2) ?></td>
                 </tr>
               <?php endforeach; ?>
               <?php if (!$pendingContributions): ?>

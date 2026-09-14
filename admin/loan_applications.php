@@ -69,7 +69,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'approve') {
         $message = "Loan application has been approved successfully.";
 
         // Send SMS
-        $smsMsg = "Dear " . $app['FirstName'] . ", your loan application for a " . $app['LoanType'] . " of KES " . number_format((float)$app['Amount'], 2) . " has been APPROVED. Thank you.";
+        $smsMsg = "Dear " . $app['FirstName'] . ", your loan application for a " . $app['LoanType'] . " of " . number_format((float)$app['Amount'], 2) . " has been APPROVED. Thank you.";
         SmsService::sendSms($app['PrimaryNumber'], $smsMsg);
 
     } catch (Throwable $e) {
@@ -115,7 +115,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'reject') {
         $message = "Loan application was rejected.";
 
         // Send SMS
-        $smsMsg = "Dear " . $app['FirstName'] . ", your loan application for a " . $app['LoanType'] . " of KES " . number_format((float)$app['Amount'], 2) . " was NOT APPROVED. Reason: " . $reason;
+        $smsMsg = "Dear " . $app['FirstName'] . ", your loan application for a " . $app['LoanType'] . " of " . number_format((float)$app['Amount'], 2) . " was NOT APPROVED. Reason: " . $reason;
         SmsService::sendSms($app['PrimaryNumber'], $smsMsg);
 
     } catch (Throwable $e) {
@@ -281,7 +281,7 @@ function e($value): string
                   <td><?= e($app['FirstName'] . ' ' . $app['LastName']) ?></td>
                   <td><?= e($app['PrimaryNumber']) ?></td>
                   <td class="fw-bold"><?= e($app['LoanType']) ?></td>
-                  <td class="fw-bold text-primary">KES <?= number_format((float)$app['Amount'], 2) ?></td>
+                  <td class="fw-bold text-primary"><?= number_format((float)$app['Amount'], 2) ?></td>
                   <td><?= e($app['ReturnDate']) ?></td>
                   <td><?= e($app['CreatedAt']) ?></td>
                   <td>

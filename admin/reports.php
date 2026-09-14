@@ -203,7 +203,7 @@ function renderTransactionRows(array $transactions): string
         <td><?= $row['MemberID'] ? e($row['MemberID']) : '<span class="badge text-bg-warning">NULL</span>' ?></td>
         <td><?= e($row['TranTime'] ?: $row['CreatedAt']) ?></td>
         <td><?= e($row['Description'] ?? '') ?></td>
-        <td class="text-end">KES <?= number_format((float)$row['Amount'], 2) ?></td>
+        <td class="text-end"><?= number_format((float)$row['Amount'], 2) ?></td>
       </tr>
     <?php endforeach;
 
@@ -270,10 +270,10 @@ function renderPagination(int $currentPage, int $totalPages): string
   <main class="container-fluid admin-shell py-4">
     <div class="row g-4 mb-4">
       <div class="col-md-4">
-        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Contributions</div><div class="h3 fw-bold">KES <?= number_format((float)($summary['TotalContributions'] ?? 0), 2) ?></div></div></div>
+        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Contributions</div><div class="h3 fw-bold"><?= number_format((float)($summary['TotalContributions'] ?? 0), 2) ?></div></div></div>
       </div>
       <div class="col-md-4">
-        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Deposits</div><div class="h3 fw-bold">KES <?= number_format((float)($summary['TotalDeposits'] ?? 0), 2) ?></div></div></div>
+        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Deposits</div><div class="h3 fw-bold"><?= number_format((float)($summary['TotalDeposits'] ?? 0), 2) ?></div></div></div>
       </div>
       <div class="col-md-4">
         <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Unmatched Records</div><div class="h3 fw-bold"><?= (int)($summary['UnmatchedTransactions'] ?? 0) ?></div></div></div>
