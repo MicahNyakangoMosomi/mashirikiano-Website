@@ -98,9 +98,22 @@ body.admin-sidebar-collapsed {
   color: #10253a;
 }
 
-.admin-nav-group {
+/* Reset Bootstrap button overrides on sidebar toggle */
+.admin-sidebar .admin-nav-group {
   display: flex;
   flex-direction: column;
+}
+
+/* Strip all Bootstrap btn/button defaults */
+.admin-sidebar button.admin-nav-parent,
+.admin-sidebar .admin-nav-parent {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  color: rgba(255, 255, 255, .78) !important;
 }
 
 .admin-nav-parent {
@@ -120,12 +133,20 @@ body.admin-sidebar-collapsed {
   font-family: inherit;
   font-size: 1rem;
   cursor: pointer;
+  /* Override any browser button default styles */
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
 }
 
 .admin-nav-parent:hover,
-.admin-nav-parent.active {
-  background: rgba(255, 255, 255, .12);
-  color: #fff;
+.admin-nav-parent.active,
+.admin-sidebar button.admin-nav-parent:hover,
+.admin-sidebar button.admin-nav-parent.active {
+  background: rgba(255, 255, 255, .12) !important;
+  color: #fff !important;
+  box-shadow: none !important;
 }
 
 .admin-nav-parent.active .admin-nav-mark {
@@ -203,8 +224,13 @@ body.admin-sidebar-collapsed .admin-nav-label {
 }
 
 body.admin-sidebar-collapsed .admin-sidebar-brand,
-body.admin-sidebar-collapsed .admin-side-nav a {
+body.admin-sidebar-collapsed .admin-side-nav a,
+body.admin-sidebar-collapsed .admin-nav-parent {
   justify-content: center;
+}
+
+body.admin-sidebar-collapsed .admin-nav-arrow {
+  display: none;
 }
 
 .admin-header {
@@ -336,8 +362,13 @@ body.admin-sidebar-collapsed .admin-side-nav a {
   }
 
   body.admin-sidebar-collapsed .admin-side-nav a,
+  body.admin-sidebar-collapsed .admin-nav-parent,
   body.admin-sidebar-collapsed .admin-sidebar-brand {
     justify-content: flex-start;
+  }
+
+  body.admin-sidebar-collapsed .admin-nav-arrow {
+    display: inline-flex;
   }
 
   body.admin-sidebar-open .admin-sidebar {
