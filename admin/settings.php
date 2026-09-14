@@ -93,7 +93,7 @@ function e($value): string
         <div class="card metric h-100">
           <div class="card-body">
             <div class="text-muted small">Current Deposit Amount</div>
-            <div class="display-6 fw-bold">KES <?= number_format((float)$settings['DepositAmount'], 2) ?></div>
+            <div class="display-6 fw-bold"><?= number_format((float)$settings['DepositAmount'], 2) ?></div>
           </div>
         </div>
       </div>
@@ -116,7 +116,6 @@ function e($value): string
           <div class="col-md-6">
             <label class="form-label" for="deposit_amount">DepositAmount</label>
             <div class="input-group">
-              <span class="input-group-text">KES</span>
               <input
                 class="form-control"
                 id="deposit_amount"

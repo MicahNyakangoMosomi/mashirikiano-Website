@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
         $netSavings = max(0.00, $totalContributions - $totalWithdrawals);
 
         if ($amount > $netSavings) {
-            throw new Exception("Requested withdrawal of KES " . number_format($amount, 2) . " exceeds member's available net savings of KES " . number_format($netSavings, 2) . ".");
+            throw new Exception("Requested withdrawal of " . number_format($amount, 2) . " exceeds member's available net savings of " . number_format($netSavings, 2) . ".");
         }
 
         // 1. Insert into withdrawals table
@@ -134,9 +134,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
         // 3. Send SMS notification to member with withdrawal details, date, updated savings, and random marketing message
         $adPromos = [
             "Grow your savings! Deposit monthly to qualify for SACCO loans of up to 3x your savings balance. Visit mashirikianosacco.co.ke",
-            "Need quick emergency funds? Apply for our instant Emergency Loan of up to KES 300,000 repayable in 12 months!",
+            "Need quick emergency funds? Apply for our instant Emergency Loan of up to 300,000 repayable in 12 months!",
             "Invest in your child's education! Open a Mashirikiano Junior Savings Account today for high interest growth.",
-            "Drive your dream vehicle! Access up to KES 3,000,000 Vehicle & Asset Financing at 1% per month reducing balance.",
+            "Drive your dream vehicle! Access up to 3,000,000 Vehicle & Asset Financing at 1% per month reducing balance.",
             "Planning to build or purchase land? Apply for our Development & Kujenga Loan. Call 0758500557 for details.",
             "Pay school fees stress-free with our Elimu Education Loan priced at 1% per month on reducing balance.",
             "Earn top returns on your extra funds with a Mashirikiano High-Yield Fixed Deposit Account today!"
@@ -145,10 +145,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
 
         $fullName = trim($member['FirstName'] . ' ' . $member['LastName']);
         $displayDate = date('d-M-Y H:i', strtotime($formattedDate));
-        $smsMsg = "Dear {$fullName}, a withdrawal of KES " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Your new current savings balance is KES " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
+        $smsMsg = "Dear {$fullName}, a withdrawal of " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Your new current savings balance is " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
         SmsService::sendSms($member['PrimaryNumber'], $smsMsg);
 
-        $_SESSION['flash_message'] = "Withdrawal of KES " . number_format($amount, 2) . " for " . e($fullName) . " ({$memberId}) processed successfully!";
+        $_SESSION['flash_message'] = "Withdrawal of " . number_format($amount, 2) . " for " . e($fullName) . " ({$memberId}) processed successfully!";
         $_SESSION['flash_message_type'] = "success";
 
         header("Location: withdrawals.php");
@@ -279,7 +279,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
           <div class="d-flex align-items-center justify-content-between">
             <div>
               <div class="text-muted small text-uppercase fw-bold">Total Contributions</div>
-              <div class="h3 fw-bold mb-0 text-success">KES <?= number_format($allContributions, 2) ?></div>
+              <div class="h3 fw-bold mb-0 text-success"><?= number_format($allContributions, 2) ?></div>
             </div>
             <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
               <i class="bi bi-piggy-bank-fill fs-4"></i>
@@ -292,7 +292,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
           <div class="d-flex align-items-center justify-content-between">
             <div>
               <div class="text-muted small text-uppercase fw-bold">Total Withdrawals</div>
-              <div class="h3 fw-bold mb-0 text-danger">KES <?= number_format($allWithdrawals, 2) ?></div>
+              <div class="h3 fw-bold mb-0 text-danger"><?= number_format($allWithdrawals, 2) ?></div>
             </div>
             <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger">
               <i class="bi bi-arrow-up-right-circle-fill fs-4"></i>
@@ -305,7 +305,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
           <div class="d-flex align-items-center justify-content-between">
             <div>
               <div class="text-muted small text-uppercase fw-bold">Net Savings Pool</div>
-              <div class="h3 fw-bold mb-0 text-info">KES <?= number_format($totalNetSavings, 2) ?></div>
+              <div class="h3 fw-bold mb-0 text-info"><?= number_format($totalNetSavings, 2) ?></div>
             </div>
             <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
               <i class="bi bi-bank2 fs-4"></i>
@@ -372,9 +372,9 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
                     <td class="fw-bold"><?= $mName ?></td>
                     <td><?= $mNatId ?></td>
                     <td><?= $mPhone ?></td>
-                    <td class="text-end text-success font-monospace">KES <?= number_format($contrib, 2) ?></td>
-                    <td class="text-end text-danger font-monospace">KES <?= number_format($withd, 2) ?></td>
-                    <td class="text-end fw-bold text-dark font-monospace bg-light">KES <?= number_format($net, 2) ?></td>
+                    <td class="text-end text-success font-monospace"><?= number_format($contrib, 2) ?></td>
+                    <td class="text-end text-danger font-monospace"><?= number_format($withd, 2) ?></td>
+                    <td class="text-end fw-bold text-dark font-monospace bg-light"><?= number_format($net, 2) ?></td>
                     <td class="text-center pe-3">
                       <button type="button"
                               class="btn btn-sm btn-danger px-3 shadow-sm btn-withdraw-trigger"
@@ -468,15 +468,14 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               <hr class="my-2">
               <div class="d-flex align-items-center justify-content-between">
                 <span class="fw-semibold text-dark">Available Savings:</span>
-                <span class="fs-5 fw-bold text-success font-monospace" id="modalSavingsDisplay">KES 0.00</span>
+                <span class="fs-5 fw-bold text-success font-monospace" id="modalSavingsDisplay">0.00</span>
               </div>
             </div>
 
             <!-- Withdrawal Amount -->
             <div class="mb-3">
-              <label for="modalAmount" class="form-label fw-bold">Withdrawal Amount (KES) <span class="text-danger">*</span></label>
+              <label for="modalAmount" class="form-label fw-bold">Withdrawal Amount <span class="text-danger">*</span></label>
               <div class="input-group input-group-lg">
-                <span class="input-group-text fw-bold">KES</span>
                 <input type="number"
                        step="0.01"
                        min="1"
@@ -554,7 +553,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
           modalMemberIdDisplay.textContent = mId;
           modalMemberName.textContent = mName;
           modalNationalId.textContent = mNatId;
-          modalSavingsDisplay.textContent = 'KES ' + savings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          modalSavingsDisplay.textContent = savings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
           modalAmount.value = '';
           modalAmount.max = savings;

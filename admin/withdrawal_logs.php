@@ -69,7 +69,7 @@ if (($_GET['download'] ?? '') === 'pdf') {
     SimplePdfTable::download(
         'withdrawals-logs-report.pdf',
         'SACCO Member Withdrawal Logs Report',
-        ['Ref #', 'Member ID', 'Member Name', 'National ID', 'Amount (KES)', 'Date & Time', 'Description'],
+        ['Ref #', 'Member ID', 'Member Name', 'National ID', 'Amount', 'Date & Time', 'Description'],
         array_map(static function (array $w): array {
             return [
                 'WD-' . $w['WithdrawalID'],
@@ -192,7 +192,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
           <div class="d-flex align-items-center justify-content-between">
             <div>
               <div class="text-muted small text-uppercase fw-bold">Total Amount Withdrawn</div>
-              <div class="h3 fw-bold mb-0 text-danger">KES <?= number_format($totalWithdrawn, 2) ?></div>
+              <div class="h3 fw-bold mb-0 text-danger"><?= number_format($totalWithdrawn, 2) ?></div>
             </div>
             <div class="bg-danger bg-opacity-10 p-3 rounded-circle text-danger">
               <i class="bi bi-arrow-up-right-circle-fill fs-4"></i>
@@ -218,7 +218,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
           <div class="d-flex align-items-center justify-content-between">
             <div>
               <div class="text-muted small text-uppercase fw-bold">Net Savings Pool</div>
-              <div class="h3 fw-bold mb-0 text-info">KES <?= number_format($netSavingsPool, 2) ?></div>
+              <div class="h3 fw-bold mb-0 text-info"><?= number_format($netSavingsPool, 2) ?></div>
             </div>
             <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
               <i class="bi bi-bank2 fs-4"></i>
@@ -281,7 +281,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
                     <td class="fw-semibold text-primary"><?= e($w['MemberID']) ?></td>
                     <td class="fw-bold"><?= e(trim($w['FirstName'] . ' ' . $w['LastName'])) ?></td>
                     <td><?= e($w['NationalID']) ?></td>
-                    <td class="text-end fw-bold text-danger font-monospace">KES <?= number_format((float)$w['Amount'], 2) ?></td>
+                    <td class="text-end fw-bold text-danger font-monospace"><?= number_format((float)$w['Amount'], 2) ?></td>
                     <td class="small text-muted"><i class="bi bi-calendar3 me-1"></i><?= date('d-M-Y H:i', strtotime($w['WithdrawalDate'])) ?></td>
                     <td><?= e($w['Description'] ?: 'Member Withdrawal') ?></td>
                     <td class="small text-muted"><?= e($w['AdminName'] ?: 'System Admin') ?></td>
