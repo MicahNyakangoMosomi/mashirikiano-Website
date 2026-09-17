@@ -312,7 +312,6 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
       <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
         <div>
           <h2 class="h5 mb-0 fw-bold text-dark">Active SACCO Members </h2>
-          
         </div>
         <form class="d-flex gap-2" method="GET" action="withdrawals.php">
           <div class="input-group input-group-sm">
@@ -571,6 +570,8 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
         }
       });
     });
+
+    
   </script>
 </body>
 </html>

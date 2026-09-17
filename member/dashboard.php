@@ -97,9 +97,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_loan'])) {
 }
 
 // Fetch totals & dashboard info
-$totalStmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount WHEN TransactionType = 'withdrawal' THEN -Amount ELSE 0 END), 0) AS Total FROM member_transactions WHERE MemberID = :member_id");
+$totalStmt = $pdo->prepare("SELECT
+  COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount ELSE 0 END), 0) AS TotalContributions,
+  COALESCE(SUM(CASE WHEN TransactionType = 'withdrawal' THEN Amount ELSE 0 END), 0) AS TotalWithdrawals
+  FROM member_transactions
+  WHERE MemberID = :member_id");
 $totalStmt->execute([':member_id' => $member['MemberID']]);
-$total = max(0.00, (float) $totalStmt->fetchColumn());
+$totals = $totalStmt->fetch() ?: [];
+$totalContributions = (float)($totals['TotalContributions'] ?? 0);
+$totalWithdrawals = (float)($totals['TotalWithdrawals'] ?? 0);
+$netSavings = max(0.00, $totalContributions - $totalWithdrawals);
 
 $recentStmt = $pdo->prepare("SELECT * FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal') ORDER BY COALESCE(TranTime, CreatedAt) DESC LIMIT 8");
 $recentStmt->execute([':member_id' => $member['MemberID']]);
@@ -271,6 +278,7 @@ function dashboardUrl(array $params): string
     .recent-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edf2ef; }
     .recent-row:last-child { border-bottom: 0; }
     .recent-icon { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #e7f5ed; color: #087a43; flex: 0 0 32px; }
+    .recent-icon.danger { background: #fdeaea; color: #c03232; }
     .remarks-link { color: #087a43; font-weight: 700; text-decoration: none; }
     .remarks-link:hover { text-decoration: underline; }
     .loan-card {
@@ -377,7 +385,32 @@ function dashboardUrl(array $params): string
                 <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
                 <div>
                   <div class="text-muted small">Total Contributions</div>
-                  <div class="h4 fw-bold mb-0">KES <?= number_format($total, 2) ?></div>
+                  <div class="h4 fw-bold mb-0">KES <?= number_format($totalContributions, 2) ?></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card metric h-100">
+              <div class="card-body d-flex align-items-center gap-3">
+                <span class="metric-icon"><i class="bi bi-piggy-bank"></i></span>
+                <div>
+                  <div class="text-muted small">Net Savings</div>
+                  <div class="h4 fw-bold mb-0">KES <?= number_format($netSavings, 2) ?></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <div class="card metric h-100">
+              <div class="card-body d-flex align-items-center gap-3">
+                <span class="metric-icon danger"><i class="bi bi-box-arrow-up-right"></i></span>
+                <div>
+                  <div class="text-muted small">Total Withdrawals</div>
+                  <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalWithdrawals, 2) ?></div>
                 </div>
               </div>
             </div>
@@ -404,17 +437,18 @@ function dashboardUrl(array $params): string
                   <a class="remarks-link" href="?tab=record">View all</a>
                 </div>
                 <?php foreach ($recentTransactions as $transaction): ?>
+                  <?php $isWithdrawal = $transaction['TransactionType'] === 'withdrawal'; ?>
                   <div class="recent-row">
-                    <span class="recent-icon"><i class="bi bi-arrow-down-left"></i></span>
+                    <span class="recent-icon <?= $isWithdrawal ? 'danger' : '' ?>"><i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : 'bi-arrow-down-left' ?>"></i></span>
                     <div class="flex-grow-1">
                       <div class="fw-bold"><?= e($transaction['TranID']) ?></div>
-                      <div class="text-muted small"><?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['MSISDN']) ?></div>
+                      <div class="text-muted small"><?= $isWithdrawal ? 'Withdrawal' : 'Contribution' ?> &middot; <?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['MSISDN']) ?></div>
                     </div>
-                    <div class="fw-bold text-success text-end">+ KES <?= number_format((float)$transaction['Amount'], 2) ?></div>
+                    <div class="fw-bold <?= $isWithdrawal ? 'text-danger' : 'text-success' ?> text-end"><?= $isWithdrawal ? '-' : '+' ?> KES <?= number_format((float)$transaction['Amount'], 2) ?></div>
                   </div>
                 <?php endforeach; ?>
                 <?php if (!$recentTransactions): ?>
-                  <div class="text-muted text-center py-3">No contributions found.</div>
+                  <div class="text-muted text-center py-3">No transaction records found.</div>
                 <?php endif; ?>
               </div>
             </div>
@@ -558,7 +592,7 @@ function dashboardUrl(array $params): string
         <section class="card metric">
           <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-              <h3 class="h5 fw-bold mb-0">Total Contribution Ledger</h3>
+              <h3 class="h5 fw-bold mb-0">Member Transaction Records</h3>
               <div class="text-muted small">Showing <?= count($paginatedTransactions) ?> of <?= $totalRecords ?> record(s)</div>
             </div>
 
@@ -587,7 +621,8 @@ function dashboardUrl(array $params): string
                   <tr>
                     <th>TransactionID</th>
                     <th>Date / Time</th>
-                    <th class="text-end">Contribution Amount</th>
+                    <th>Type</th>
+                    <th class="text-end">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -595,11 +630,16 @@ function dashboardUrl(array $params): string
                     <tr>
                       <td class="fw-bold text-primary"><?= e($row['TranID']) ?></td>
                       <td><?= e($row['TranTime'] ?: $row['CreatedAt']) ?></td>
-                      <td class="text-end fw-bold">KES <?= number_format((float)$row['Amount'], 2) ?></td>
+                      <?php $isWithdrawal = $row['TransactionType'] === 'withdrawal'; ?>
+                      <td class="<?= $isWithdrawal ? 'text-danger' : 'text-success' ?> fw-semibold">
+                        <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : 'bi-arrow-down-left' ?> me-1" aria-hidden="true"></i>
+                        <?= $isWithdrawal ? 'Withdrawal' : 'Contribution' ?>
+                      </td>
+                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : 'text-success' ?>"><?= $isWithdrawal ? '-' : '+' ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
                     </tr>
                   <?php endforeach; ?>
                   <?php if (!$paginatedTransactions): ?>
-                    <tr><td colspan="3" class="text-muted text-center py-3">No contributions found.</td></tr>
+                    <tr><td colspan="4" class="text-muted text-center py-3">No transaction records found.</td></tr>
                   <?php endif; ?>
                 </tbody>
               </table>
