@@ -311,8 +311,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
     <div class="card shadow-sm border-0 mb-5">
       <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
         <div>
-          <h2 class="h5 mb-0 fw-bold text-dark"><i class="bi bi-person-check text-primary me-2"></i>Active SACCO Members (Select to Withdraw)</h2>
-          <div class="text-muted small">Click the "Withdraw" button on any active member to trigger a cash withdrawal pop-out.</div>
+          <h2 class="h5 mb-0 fw-bold text-dark">Active SACCO Members </h2>
         </div>
         <form class="d-flex gap-2" method="GET" action="withdrawals.php">
           <div class="input-group input-group-sm">
@@ -571,6 +570,8 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
         }
       });
     });
+
+    
   </script>
 </body>
 </html>
