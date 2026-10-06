@@ -194,6 +194,13 @@ try {
         FILE_APPEND
     );
 
+    require_once __DIR__ . '/../classes/SystemLogger.php';
+    SystemLogger::error('mpesa', 'M-Pesa callback error: ' . $e->getMessage(), [
+        'payload' => $rawPayload,
+        'file'    => $e->getFile(),
+        'line'    => $e->getLine(),
+    ]);
+
     /**
      * 9. STILL return HTTP 200 (important for Safaricom)
      * We do NOT want repeated retries due to HTTP errors

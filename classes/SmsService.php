@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/SystemLogger.php';
+
 /**
  * Class SmsService
- * Handles sending SMS messages via the OramMobile API.
+ * Handles sending SMS messages via the OramMobile API with automatic message & error logging.
  */
 class SmsService
 {
@@ -19,7 +21,7 @@ class SmsService
     }
 
     /**
-     * Send an SMS using OramMobile API
+     * Send an SMS using OramMobile API and record it into message_logs & system_logs.
      *
      * Endpoint: POST https://vas-api.oramobile.co.ke/api/v1/messages
      * Auth:     Authorization: Bearer {API_TOKEN}
@@ -34,9 +36,12 @@ class SmsService
         $oramobile = self::config()['oramobile'] ?? [];
         $apiKey    = $oramobile['api_key']   ?? '';
         $senderId  = $oramobile['sender_id'] ?? '';
+        $normPhone = self::normalizePhone($phone);
 
         if (empty($apiKey)) {
-            self::logError("SMS skipped: OramMobile API key is not configured. Phone: $phone, Message: $message");
+            $err = 'OramMobile API key is not configured.';
+            self::logError("SMS skipped: {$err} Phone: $normPhone, Message: $message");
+            SystemLogger::logMessage($normPhone, $message, 'Failed', 'single', null, null, $err, null, $senderId);
             return false;
         }
 
@@ -44,7 +49,7 @@ class SmsService
 
         $data = [
             'sender_id' => $senderId,
-            'phone'     => self::normalizePhone($phone),
+            'phone'     => $normPhone,
             'message'   => $message,
         ];
 
@@ -68,22 +73,28 @@ class SmsService
         curl_close($ch);
 
         if ($response === false || $httpCode >= 400) {
-            self::logError("OramMobile API Error (HTTP $httpCode): " . ($error ?: $response) . " Payload: " . json_encode($data));
+            $errMsg = "OramMobile API Error (HTTP $httpCode): " . ($error ?: $response);
+            self::logError($errMsg . " Payload: " . json_encode($data));
+            SystemLogger::logMessage($normPhone, $message, 'Failed', 'single', $httpCode, (string)$response, $errMsg, null, $senderId);
             return false;
         }
 
         // Decode and verify success flag from response
-        $decoded = json_decode($response, true);
+        $decoded = json_decode((string)$response, true);
         if (!isset($decoded['success']) || $decoded['success'] !== true) {
-            self::logError("OramMobile API rejected message (HTTP $httpCode): $response Payload: " . json_encode($data));
+            $errMsg = "OramMobile API rejected message (HTTP $httpCode): " . $response;
+            self::logError($errMsg . " Payload: " . json_encode($data));
+            SystemLogger::logMessage($normPhone, $message, 'Failed', 'single', $httpCode, (string)$response, $errMsg, null, $senderId);
             return false;
         }
 
+        // Successfully sent
+        SystemLogger::logMessage($normPhone, $message, 'Sent', 'single', $httpCode, (string)$response, null, null, $senderId);
         return true;
     }
 
     /**
-     * Send the same SMS to multiple recipients in one API call.
+     * Send the same SMS to multiple recipients in one API call and record logs.
      *
      * Endpoint: POST https://vas-api.oramobile.co.ke/api/v1/messages/bulk
      * Auth:     Authorization: Bearer {API_TOKEN}
@@ -102,6 +113,9 @@ class SmsService
         if (empty($apiKey)) {
             $err = 'OramMobile API key is not configured.';
             self::logError('Bulk SMS skipped: ' . $err);
+            foreach ($phones as $p) {
+                SystemLogger::logMessage(self::normalizePhone($p), $message, 'Failed', 'bulk', null, null, $err, null, $senderId);
+            }
             return ['success' => false, 'error' => $err, 'data' => []];
         }
 
@@ -132,7 +146,7 @@ class SmsService
                 'Content-Type: application/json',
                 'Accept: application/json',
             ],
-            CURLOPT_TIMEOUT        => 30,   // bulk can take longer
+            CURLOPT_TIMEOUT        => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
         ]);
 
@@ -144,14 +158,25 @@ class SmsService
         if ($response === false || $httpCode >= 400) {
             $errMsg = "Bulk SMS API Error (HTTP $httpCode): " . ($error ?: $response);
             self::logError($errMsg . ' Payload phones count: ' . count($normalised));
+            foreach ($normalised as $p) {
+                SystemLogger::logMessage($p, $message, 'Failed', 'bulk', $httpCode, (string)$response, $errMsg, null, $senderId);
+            }
             return ['success' => false, 'error' => $errMsg, 'data' => []];
         }
 
-        $decoded = json_decode($response, true);
+        $decoded = json_decode((string)$response, true);
         if (!isset($decoded['success']) || $decoded['success'] !== true) {
             $errMsg = 'OramMobile rejected bulk message: ' . $response;
             self::logError($errMsg);
+            foreach ($normalised as $p) {
+                SystemLogger::logMessage($p, $message, 'Failed', 'bulk', $httpCode, (string)$response, $errMsg, null, $senderId);
+            }
             return ['success' => false, 'error' => $errMsg, 'data' => $decoded ?? []];
+        }
+
+        // Successfully queued/sent
+        foreach ($normalised as $p) {
+            SystemLogger::logMessage($p, $message, 'Sent', 'bulk', $httpCode, (string)$response, null, null, $senderId);
         }
 
         return [

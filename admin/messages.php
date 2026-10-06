@@ -178,6 +178,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
     } catch (Throwable $e) {
+        SystemLogger::error('message', 'Admin message processing error: ' . $e->getMessage(), [
+            'action' => $action,
+            'file'   => $e->getFile(),
+            'line'   => $e->getLine(),
+        ]);
         $_SESSION['msg_flash']      = $e->getMessage();
         $_SESSION['msg_flash_type'] = 'danger';
         if ($action === 'single' || $action === 'selected') {
