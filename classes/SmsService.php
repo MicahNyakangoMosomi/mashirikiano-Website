@@ -82,13 +82,90 @@ class SmsService
         return true;
     }
 
+    /**
+     * Send the same SMS to multiple recipients in one API call.
+     *
+     * Endpoint: POST https://vas-api.oramobile.co.ke/api/v1/messages/bulk
+     * Auth:     Authorization: Bearer {API_TOKEN}
+     * Body:     { sender_id, phones: ['+254...', ...], message }
+     *
+     * @param  string[] $phones  List of phone numbers (any format — normalised internally)
+     * @param  string   $message The SMS text to broadcast
+     * @return array   ['success' => bool, 'data' => [...], 'error' => string]
+     */
+    public static function sendBulkSms(array $phones, string $message): array
+    {
+        $oramobile = self::config()['oramobile'] ?? [];
+        $apiKey    = $oramobile['api_key']   ?? '';
+        $senderId  = $oramobile['sender_id'] ?? '';
 
+        if (empty($apiKey)) {
+            $err = 'OramMobile API key is not configured.';
+            self::logError('Bulk SMS skipped: ' . $err);
+            return ['success' => false, 'error' => $err, 'data' => []];
+        }
 
+        // Normalise every number to E.164 and deduplicate
+        $normalised = array_values(array_unique(array_map(
+            [self::class, 'normalizePhone'],
+            $phones
+        )));
+
+        if (empty($normalised)) {
+            return ['success' => false, 'error' => 'No valid phone numbers.', 'data' => []];
+        }
+
+        $url  = 'https://vas-api.oramobile.co.ke/api/v1/messages/bulk';
+        $data = [
+            'sender_id' => $senderId,
+            'phones'    => $normalised,
+            'message'   => $message,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST  => 'POST',
+            CURLOPT_POSTFIELDS     => json_encode($data),
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+            CURLOPT_TIMEOUT        => 30,   // bulk can take longer
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($response === false || $httpCode >= 400) {
+            $errMsg = "Bulk SMS API Error (HTTP $httpCode): " . ($error ?: $response);
+            self::logError($errMsg . ' Payload phones count: ' . count($normalised));
+            return ['success' => false, 'error' => $errMsg, 'data' => []];
+        }
+
+        $decoded = json_decode($response, true);
+        if (!isset($decoded['success']) || $decoded['success'] !== true) {
+            $errMsg = 'OramMobile rejected bulk message: ' . $response;
+            self::logError($errMsg);
+            return ['success' => false, 'error' => $errMsg, 'data' => $decoded ?? []];
+        }
+
+        return [
+            'success' => true,
+            'data'    => $decoded['data'] ?? [],
+            'error'   => '',
+        ];
+    }
 
     /**
-     * Normalize phone number to E.164 (+254...) format required by OramMobile
+     * Normalize phone number to E.164 (+254...) format required by OramMobile.
+     * Public so it can be called statically from external code.
      */
-    private static function normalizePhone(string $phone): string
+    public static function normalizePhone(string $phone): string
     {
         $phone = preg_replace('/\s+/', '', $phone);
         
