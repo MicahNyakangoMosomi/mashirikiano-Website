@@ -79,66 +79,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['msg_flash_type'] = 'success';
 
         /* -----------------------------------------------
-         * SINGLE / MULTIPLE SELECTED: 1 or more members
+         * SINGLE OR ALL FROM SELECT INPUT
          * --------------------------------------------- */
         } elseif ($action === 'single' || $action === 'selected') {
-            $rawMemberIds = $_POST['member_ids'] ?? ($_POST['member_id'] ?? []);
-            if (!is_array($rawMemberIds)) {
-                $rawMemberIds = [$rawMemberIds];
-            }
-            $memberIds = array_values(array_filter(array_map('trim', $rawMemberIds)));
-
-            if (empty($memberIds)) {
-                throw new InvalidArgumentException('Please select at least one member.');
+            $memberId = trim((string)($_POST['member_id'] ?? ''));
+            if ($memberId === '' && !empty($_POST['member_ids'])) {
+                $ids = (array)$_POST['member_ids'];
+                $memberId = reset($ids);
             }
 
-            $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
-            $mStmt = $pdo->prepare(
-                "SELECT MemberID, FirstName, LastName, PrimaryNumber
-                 FROM members
-                 WHERE MemberID IN ($placeholders)
-                   AND Status = 'Active'"
-            );
-            $mStmt->execute($memberIds);
-            $selectedMembers = $mStmt->fetchAll(PDO::FETCH_ASSOC);
-
-            if (empty($selectedMembers)) {
-                throw new RuntimeException('None of the selected members were found or active.');
+            if ($memberId === '') {
+                throw new InvalidArgumentException('Please select a member.');
             }
 
-            $validMembers = array_values(array_filter($selectedMembers, function ($m) {
-                return !empty(trim((string)($m['PrimaryNumber'] ?? '')));
-            }));
+            // If user selected "all" in the select input
+            if ($memberId === 'all') {
+                $phoneStmt = $pdo->query(
+                    "SELECT PrimaryNumber FROM members
+                     WHERE Status = 'Active'
+                       AND PrimaryNumber IS NOT NULL
+                       AND PrimaryNumber <> ''"
+                );
+                $phones = array_column($phoneStmt->fetchAll(PDO::FETCH_ASSOC), 'PrimaryNumber');
 
-            if (empty($validMembers)) {
-                throw new RuntimeException('The selected member(s) do not have a valid phone number on record.');
-            }
-
-            $phones = array_column($validMembers, 'PrimaryNumber');
-            $count  = count($phones);
-
-            if ($count === 1) {
-                $singleMember = $validMembers[0];
-                $singlePhone  = $singleMember['PrimaryNumber'];
-                $singleName   = trim($singleMember['FirstName'] . ' ' . $singleMember['LastName']);
-
-                $sent = SmsService::sendSms($singlePhone, $messageBody);
-                if (!$sent) {
-                    throw new RuntimeException("Message delivery failed to {$singleName} ({$singlePhone}). Check SMS logs.");
+                if (empty($phones)) {
+                    throw new RuntimeException('No active members with a phone number found.');
                 }
 
-                $_SESSION['msg_flash']      = "Message sent to {$singleName} ({$singlePhone}).";
-                $_SESSION['msg_flash_type'] = 'success';
-            } else {
                 $result = SmsService::sendBulkSms($phones, $messageBody);
                 if (!$result['success']) {
                     throw new RuntimeException('Bulk send failed: ' . ($result['error'] ?? 'Unknown error'));
                 }
 
-                $queued = $result['data']['queued'] ?? $count;
-                $_SESSION['msg_flash']      = "Message queued successfully for {$queued} selected member(s).";
+                $queued = $result['data']['queued'] ?? count($phones);
+                $_SESSION['msg_flash']      = "Bulk SMS queued successfully for {$queued} recipient(s).";
                 $_SESSION['msg_flash_type'] = 'success';
+
+                header('Location: messages.php?tab=single');
+                exit;
             }
+
+            // Specific member
+            $mStmt = $pdo->prepare(
+                "SELECT FirstName, LastName, PrimaryNumber
+                 FROM members
+                 WHERE MemberID = :id AND Status = 'Active'
+                 LIMIT 1"
+            );
+            $mStmt->execute([':id' => $memberId]);
+            $member = $mStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$member) {
+                throw new RuntimeException('Member not found or is not active.');
+            }
+
+            $phone = trim((string)($member['PrimaryNumber'] ?? ''));
+            if ($phone === '') {
+                throw new RuntimeException('This member has no phone number on record.');
+            }
+
+            $sent = SmsService::sendSms($phone, $messageBody);
+            if (!$sent) {
+                throw new RuntimeException('Message delivery failed. Check SMS error logs.');
+            }
+
+            $name = trim($member['FirstName'] . ' ' . $member['LastName']);
+            $_SESSION['msg_flash']      = "Message sent to {$name} ({$phone}).";
+            $_SESSION['msg_flash_type'] = 'success';
 
             header('Location: messages.php?tab=single');
             exit;
@@ -283,8 +290,8 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
           <button class="msg-tab-btn <?= $initialTab === 'single' ? 'active' : '' ?>" id="tab-single-btn"
                   role="tab" aria-selected="<?= $initialTab === 'single' ? 'true' : 'false' ?>" aria-controls="panel-single"
                   onclick="switchTab('single')">
-            Select Member(s)
-            <span class="tab-sub">Choose one or more members to send to</span>
+            Select Member
+            <span class="tab-sub">Choose a member from the dropdown</span>
           </button>
         </div>
 
@@ -337,57 +344,48 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
           </form>
         </div><!-- /panel-bulk -->
 
-        <!-- ═══════════════ PANEL 2 — SINGLE OR MULTIPLE MEMBERS ═══════════════ -->
+        <!-- ═══════════════ PANEL 2 — SELECT INPUT ═══════════════ -->
         <div class="msg-panel <?= $initialTab === 'single' ? 'active' : '' ?>" id="panel-single" role="tabpanel" aria-labelledby="tab-single-btn">
-          <form method="post" id="form-single" onsubmit="return validateSingleForm()">
+          <form method="post" id="form-single">
             <input type="hidden" name="action" value="single">
 
             <div class="row g-3">
-              <div class="col-12">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                  <label class="form-label fw-bold mb-0" for="member_ids">Select Member(s)</label>
-                  <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-light text-dark border" id="selected-count-badge">0 selected</span>
-                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllMembers()">Select All</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllMembers()">Clear</button>
-                  </div>
-                </div>
-
-                <input
-                  type="text"
-                  class="form-control mb-2"
-                  id="memberSearchInput"
-                  placeholder="Filter members by name, National ID, or phone..."
-                  oninput="filterMemberOptions(this.value)"
-                >
-
+              <div class="col-md-6">
+                <label class="form-label fw-bold" for="member_id">Select Member</label>
                 <select
                   class="form-select"
-                  id="member_ids"
-                  name="member_ids[]"
-                  multiple
-                  size="8"
-                  onchange="updateSelectionCount(this)"
+                  id="member_id"
+                  name="member_id"
+                  onchange="updateSingleRecipient(this)"
                   required
                 >
-                  <?php foreach ($members as $m): ?>
-                    <?php
-                      $phone = trim((string)($m['PrimaryNumber'] ?? ''));
-                      $name = trim($m['FirstName'] . ' ' . $m['LastName']);
-                      $hasPhone = ($phone !== '');
-                    ?>
-                    <option
-                      value="<?= he($m['MemberID']) ?>"
-                      data-name="<?= he($name) ?>"
-                      data-phone="<?= he($phone) ?>"
-                      data-search="<?= he(strtolower($name . ' ' . $m['NationalID'] . ' ' . $phone)) ?>"
-                      <?= !$hasPhone ? 'disabled' : '' ?>
-                    >
-                      <?= he($name) ?> (ID: <?= he($m['NationalID']) ?> - <?= $hasPhone ? he($phone) : 'No phone' ?>)
-                    </option>
-                  <?php endforeach; ?>
+                  <option value="">Choose a member</option>
+                  <option value="all">All Active Members (Broadcast to all <?= he($totalActive) ?>)</option>
+                  <optgroup label="Members">
+                    <?php foreach ($members as $m): ?>
+                      <?php
+                        $phone = trim((string)($m['PrimaryNumber'] ?? ''));
+                        $name = trim($m['FirstName'] . ' ' . $m['LastName']);
+                        $hasPhone = ($phone !== '');
+                      ?>
+                      <option
+                        value="<?= he($m['MemberID']) ?>"
+                        data-phone="<?= he($phone) ?>"
+                        data-name="<?= he($name) ?>"
+                        <?= !$hasPhone ? 'disabled' : '' ?>
+                      >
+                        <?= he($name) ?> (<?= he($m['NationalID']) ?> - <?= $hasPhone ? he($phone) : 'No phone' ?>)
+                      </option>
+                    <?php endforeach; ?>
+                  </optgroup>
                 </select>
-                <div class="form-text">Hold Ctrl (or Cmd on Mac) to select multiple members, or use the Select All button.</div>
+              </div>
+
+              <div class="col-md-6 d-flex align-items-end">
+                <div id="single-phone-badge" style="display:none">
+                  <label class="form-label fw-bold d-block">Sending to</label>
+                  <span class="recipient-badge" id="single-phone-display"></span>
+                </div>
               </div>
 
               <div class="col-12">
@@ -459,84 +457,35 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
       }
     }
 
-    function updateSelectionCount(select) {
-      var count = 0;
-      for (var i = 0; i < select.options.length; i++) {
-        if (select.options[i].selected) {
-          count++;
-        }
-      }
-      var badge = document.getElementById('selected-count-badge');
-      if (badge) {
-        badge.textContent = count + ' selected';
-      }
-      var btn = document.getElementById('single-send-btn');
-      if (btn) {
-        if (count === 0) {
-          btn.textContent = 'Send Message';
-        } else if (count === 1) {
-          btn.textContent = 'Send to 1 Member';
-        } else {
-          btn.textContent = 'Send to ' + count + ' Selected Members';
-        }
-      }
-    }
+    function updateSingleRecipient(select) {
+      var val   = select.value;
+      var opt   = select.options[select.selectedIndex];
+      var badge = document.getElementById('single-phone-badge');
+      var disp  = document.getElementById('single-phone-display');
+      var btn   = document.getElementById('single-send-btn');
 
-    function filterMemberOptions(query) {
-      var q = query.trim().toLowerCase();
-      var select = document.getElementById('member_ids');
-      if (!select) return;
-      for (var i = 0; i < select.options.length; i++) {
-        var opt = select.options[i];
-        var s = opt.getAttribute('data-search') || opt.text.toLowerCase();
-        if (q === '' || s.indexOf(q) !== -1) {
-          opt.style.display = '';
-        } else {
-          opt.style.display = 'none';
-        }
+      if (!val) {
+        if (badge) badge.style.display = 'none';
+        if (btn) btn.textContent = 'Send Message';
+        return;
       }
-    }
 
-    function selectAllMembers() {
-      var select = document.getElementById('member_ids');
-      if (!select) return;
-      var q = (document.getElementById('memberSearchInput').value || '').trim().toLowerCase();
-      for (var i = 0; i < select.options.length; i++) {
-        var opt = select.options[i];
-        if (opt.disabled) continue;
-        if (q !== '' && opt.style.display === 'none') continue;
-        opt.selected = true;
+      if (val === 'all') {
+        if (disp) disp.textContent = 'All <?= (int)$totalActive ?> Active Members';
+        if (badge) badge.style.display = '';
+        if (btn) btn.textContent = 'Send to All <?= (int)$totalActive ?> Members';
+      } else {
+        var phone = opt ? (opt.getAttribute('data-phone') || '') : '';
+        var name  = opt ? (opt.getAttribute('data-name')  || '') : '';
+        if (disp) disp.textContent = name + ' (' + phone + ')';
+        if (badge) badge.style.display = '';
+        if (btn) btn.textContent = 'Send to ' + name;
       }
-      updateSelectionCount(select);
-    }
-
-    function deselectAllMembers() {
-      var select = document.getElementById('member_ids');
-      if (!select) return;
-      for (var i = 0; i < select.options.length; i++) {
-        select.options[i].selected = false;
-      }
-      updateSelectionCount(select);
     }
 
     function confirmBulk() {
       var total = <?= (int)$totalActive ?>;
       return confirm('You are about to send an SMS to ALL ' + total + ' active member(s).\n\nContinue?');
-    }
-
-    function validateSingleForm() {
-      var select = document.getElementById('member_ids');
-      var count = 0;
-      if (select) {
-        for (var i = 0; i < select.options.length; i++) {
-          if (select.options[i].selected) count++;
-        }
-      }
-      if (count === 0) {
-        alert('Please select at least one member.');
-        return false;
-      }
-      return confirm('Send message to ' + count + ' selected member(s)?');
     }
   </script>
 </body>
