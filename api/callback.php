@@ -89,9 +89,18 @@ try {
         $fullName = trim($memberFirstName . ' ' . $memberLastName);
 
         
+        // Total contributions (monthly savings)
         $stmt = $pdo->prepare("SELECT SUM(Amount) FROM member_transactions WHERE NationalID = :national_id AND TransactionType = 'contribution'");
         $stmt->execute([':national_id' => $nationalId]);
-        $totalContribution = number_format((float)$stmt->fetchColumn(), 2);
+        $totalContribution = (float)$stmt->fetchColumn();
+
+        // Total deposit paid (registration deposit + any top-ups)
+        $depositStmt = $pdo->prepare("SELECT COALESCE(PaidAmount, 0) FROM deposits WHERE MemberID = (SELECT MemberID FROM members WHERE NationalID = :national_id LIMIT 1) LIMIT 1");
+        $depositStmt->execute([':national_id' => $nationalId]);
+        $totalDepositPaid = (float)$depositStmt->fetchColumn();
+
+        // Net savings = contributions + deposit paid
+        $netSavings = $totalContribution + $totalDepositPaid;
 
         $segments = $result['segments'] ?? [];
         $depositAmount = 0.00;
@@ -114,7 +123,7 @@ try {
         }
         $allocationText = $allocation ? ' Allocation: ' . implode(', ', $allocation) . '.' : '';
 
-        $smsMessage = "Confirmed. Payment of {$amount} sent to {$fullName} of ID {$nationalId} Ref {$tranId} at {$tranTime}.{$allocationText} Total Contribution is {$totalContribution}. For queries contact 0758500557 or email: support@mashirikianosacco.co.ke.";
+        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} at {$tranTime}.{$allocationText} Total Contributions: KES " . number_format($totalContribution, 2) . ". Net Savings: KES " . number_format($netSavings, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
         if ($memberPhone !== '') {
