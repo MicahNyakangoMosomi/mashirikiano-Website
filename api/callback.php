@@ -91,10 +91,10 @@ try {
         
         // -------------------------------------------------------
         // Net savings: query the actual ledger (member_transactions)
-        // — the single source of truth for all money movements.
-        // One query, broken down by TransactionType. Use MemberID
-        // (already resolved by recordC2BCallback) when available,
-        // fall back to NationalID for unlinked members.
+        // Net Savings = Total Contributions − Total Withdrawals
+        // One query covers all three types in a single round-trip.
+        // Use MemberID (already resolved) when available, fall back
+        // to NationalID for unlinked / unregistered members.
         // -------------------------------------------------------
         $memberId = $result['member_id'] ?? null;
 
@@ -106,7 +106,7 @@ try {
                     SUM(Amount) AS total
                  FROM member_transactions
                  WHERE MemberID = :member_id
-                   AND TransactionType IN ('deposit', 'contribution')
+                   AND TransactionType IN ('contribution', 'withdrawal')
                  GROUP BY TransactionType"
             );
             $savingsStmt->execute([':member_id' => $memberId]);
@@ -118,24 +118,24 @@ try {
                     SUM(Amount) AS total
                  FROM member_transactions
                  WHERE NationalID = :national_id
-                   AND TransactionType IN ('deposit', 'contribution')
+                   AND TransactionType IN ('contribution', 'withdrawal')
                  GROUP BY TransactionType"
             );
             $savingsStmt->execute([':national_id' => $nationalId]);
         }
 
         $totalContribution = 0.00;
-        $totalDepositPaid  = 0.00;
+        $totalWithdrawals  = 0.00;
         foreach ($savingsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             if ($row['TransactionType'] === 'contribution') {
                 $totalContribution = (float)$row['total'];
-            } elseif ($row['TransactionType'] === 'deposit') {
-                $totalDepositPaid = (float)$row['total'];
+            } elseif ($row['TransactionType'] === 'withdrawal') {
+                $totalWithdrawals = (float)$row['total'];
             }
         }
 
-        // Net savings = all contributions + all deposits recorded in ledger
-        $netSavings = $totalContribution + $totalDepositPaid;
+        // Net savings = Total Contributions − Total Withdrawals
+        $netSavings = $totalContribution - $totalWithdrawals;
 
         $segments = $result['segments'] ?? [];
         $depositAmount = 0.00;
