@@ -89,17 +89,52 @@ try {
         $fullName = trim($memberFirstName . ' ' . $memberLastName);
 
         
-        // Total contributions (monthly savings)
-        $stmt = $pdo->prepare("SELECT SUM(Amount) FROM member_transactions WHERE NationalID = :national_id AND TransactionType = 'contribution'");
-        $stmt->execute([':national_id' => $nationalId]);
-        $totalContribution = (float)$stmt->fetchColumn();
+        // -------------------------------------------------------
+        // Net savings: query the actual ledger (member_transactions)
+        // — the single source of truth for all money movements.
+        // One query, broken down by TransactionType. Use MemberID
+        // (already resolved by recordC2BCallback) when available,
+        // fall back to NationalID for unlinked members.
+        // -------------------------------------------------------
+        $memberId = $result['member_id'] ?? null;
 
-        // Total deposit paid (registration deposit + any top-ups)
-        $depositStmt = $pdo->prepare("SELECT COALESCE(PaidAmount, 0) FROM deposits WHERE MemberID = (SELECT MemberID FROM members WHERE NationalID = :national_id LIMIT 1) LIMIT 1");
-        $depositStmt->execute([':national_id' => $nationalId]);
-        $totalDepositPaid = (float)$depositStmt->fetchColumn();
+        if ($memberId !== null) {
+            // Preferred: look up by MemberID — exact, no ambiguity
+            $savingsStmt = $pdo->prepare(
+                "SELECT
+                    TransactionType,
+                    SUM(Amount) AS total
+                 FROM member_transactions
+                 WHERE MemberID = :member_id
+                   AND TransactionType IN ('deposit', 'contribution')
+                 GROUP BY TransactionType"
+            );
+            $savingsStmt->execute([':member_id' => $memberId]);
+        } else {
+            // Fallback: unregistered sender — use NationalID
+            $savingsStmt = $pdo->prepare(
+                "SELECT
+                    TransactionType,
+                    SUM(Amount) AS total
+                 FROM member_transactions
+                 WHERE NationalID = :national_id
+                   AND TransactionType IN ('deposit', 'contribution')
+                 GROUP BY TransactionType"
+            );
+            $savingsStmt->execute([':national_id' => $nationalId]);
+        }
 
-        // Net savings = contributions + deposit paid
+        $totalContribution = 0.00;
+        $totalDepositPaid  = 0.00;
+        foreach ($savingsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if ($row['TransactionType'] === 'contribution') {
+                $totalContribution = (float)$row['total'];
+            } elseif ($row['TransactionType'] === 'deposit') {
+                $totalDepositPaid = (float)$row['total'];
+            }
+        }
+
+        // Net savings = all contributions + all deposits recorded in ledger
         $netSavings = $totalContribution + $totalDepositPaid;
 
         $segments = $result['segments'] ?? [];
