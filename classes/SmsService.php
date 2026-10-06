@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Class SmsService
- * Handles sending SMS messages via the MobileSasa API.
+ * Handles sending SMS messages via the OramMobile API.
  */
 class SmsService
 {
@@ -19,44 +19,47 @@ class SmsService
     }
 
     /**
-     * Send an SMS using MobileSasa API
-     * 
+     * Send an SMS using OramMobile API
+     *
+     * Endpoint: POST https://vas-api.oramobile.co.ke/api/v1/messages
+     * Auth:     Authorization: Bearer {API_TOKEN}
+     * Body:     { sender_id, phone, message }
+     *
      * @param string $phone The recipient phone number
      * @param string $message The SMS text
      * @return bool True if successful, false otherwise
      */
     public static function sendSms(string $phone, string $message): bool
     {
-        $mobilesasa = self::config()['mobilesasa'] ?? [];
-        $apiKey = $mobilesasa['api_key'] ?? '';
-        $senderId = $mobilesasa['sender_id'] ?? '';
+        $oramobile = self::config()['oramobile'] ?? [];
+        $apiKey    = $oramobile['api_key']   ?? '';
+        $senderId  = $oramobile['sender_id'] ?? '';
 
         if (empty($apiKey)) {
-            self::logError("SMS skipped: Oracom API key is not configured. Phone: $phone, Message: $message");
+            self::logError("SMS skipped: OramMobile API key is not configured. Phone: $phone, Message: $message");
             return false;
         }
 
-        $url = 'https://vas.oramobile.co.ke/api/v2/send/message';
+        $url = 'https://vas-api.oramobile.co.ke/api/v1/messages';
 
         $data = [
-            'phone'    => self::normalizePhone($phone),
-            'message'  => $message,
-            'senderID' => $senderId,
-            'trackingId' => self::generateTrackingId()
+            'sender_id' => $senderId,
+            'phone'     => self::normalizePhone($phone),
+            'message'   => $message,
         ];
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
+            CURLOPT_CUSTOMREQUEST  => 'POST',
             CURLOPT_POSTFIELDS     => json_encode($data),
             CURLOPT_HTTPHEADER     => [
                 'Authorization: Bearer ' . $apiKey,
                 'Content-Type: application/json',
-                'Accept: application/json'
+                'Accept: application/json',
             ],
             CURLOPT_TIMEOUT        => 10,
-            CURLOPT_CONNECTTIMEOUT => 5
+            CURLOPT_CONNECTTIMEOUT => 5,
         ]);
 
         $response = curl_exec($ch);
@@ -65,30 +68,25 @@ class SmsService
         curl_close($ch);
 
         if ($response === false || $httpCode >= 400) {
-            self::logError("MobileSasa API Error (HTTP $httpCode): " . ($error ?: $response) . " Payload: " . json_encode($data));
+            self::logError("OramMobile API Error (HTTP $httpCode): " . ($error ?: $response) . " Payload: " . json_encode($data));
+            return false;
+        }
+
+        // Decode and verify success flag from response
+        $decoded = json_decode($response, true);
+        if (!isset($decoded['success']) || $decoded['success'] !== true) {
+            self::logError("OramMobile API rejected message (HTTP $httpCode): $response Payload: " . json_encode($data));
             return false;
         }
 
         return true;
     }
 
-    /* generate a unique tracking ID for each message */
-    private static function generateTrackingId(): string
-    {        
-        // Using random_bytes for better uniqueness and security
-        // generate 4 groups of bin2hex then combine then to 16
 
-
-        $parts = [];
-        for ($i = 0; $i < 4; $i++) {
-            $parts[] = bin2hex(random_bytes(4)); // 8 hex chars = 4 bytes
-        }
-        return implode('-', $parts);
-    }
 
 
     /**
-     * Normalize phone number to +254 format required by MobileSasa
+     * Normalize phone number to E.164 (+254...) format required by OramMobile
      */
     private static function normalizePhone(string $phone): string
     {
