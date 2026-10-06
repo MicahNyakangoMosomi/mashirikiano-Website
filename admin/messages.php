@@ -79,40 +79,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['msg_flash_type'] = 'success';
 
         /* -----------------------------------------------
-         * SINGLE: POST /api/v1/messages
+         * SELECTED: One or more selected members
          * --------------------------------------------- */
-        } elseif ($action === 'single') {
-            $memberId = trim((string)($_POST['member_id'] ?? ''));
-            if ($memberId === '') {
-                throw new InvalidArgumentException('Please select a member.');
+        } elseif ($action === 'selected' || $action === 'single') {
+            $rawMemberIds = $_POST['member_ids'] ?? ($_POST['member_id'] ?? []);
+            if (!is_array($rawMemberIds)) {
+                $rawMemberIds = [$rawMemberIds];
+            }
+            $memberIds = array_values(array_filter(array_map('trim', $rawMemberIds)));
+
+            if (empty($memberIds)) {
+                throw new InvalidArgumentException('Please select at least one member to receive the message.');
             }
 
+            $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
             $mStmt = $pdo->prepare(
-                "SELECT FirstName, LastName, PrimaryNumber
+                "SELECT MemberID, FirstName, LastName, PrimaryNumber
                  FROM members
-                 WHERE MemberID = :id AND Status = 'Active'
-                 LIMIT 1"
+                 WHERE MemberID IN ($placeholders) AND Status = 'Active'"
             );
-            $mStmt->execute([':id' => $memberId]);
-            $member = $mStmt->fetch(PDO::FETCH_ASSOC);
+            $mStmt->execute($memberIds);
+            $selectedMembers = $mStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            if (!$member) {
-                throw new RuntimeException('Member not found or is not active.');
+            if (empty($selectedMembers)) {
+                throw new RuntimeException('None of the selected members were found or active.');
             }
 
-            $phone = trim((string)($member['PrimaryNumber'] ?? ''));
-            if ($phone === '') {
-                throw new RuntimeException('This member has no phone number on record.');
+            $validMembers = array_values(array_filter($selectedMembers, function ($m) {
+                return !empty(trim((string)($m['PrimaryNumber'] ?? '')));
+            }));
+
+            if (empty($validMembers)) {
+                throw new RuntimeException('The selected member(s) do not have a valid phone number on record.');
             }
 
-            $sent = SmsService::sendSms($phone, $messageBody);
-            if (!$sent) {
-                throw new RuntimeException('Message delivery failed. Check SMS error logs.');
+            $phones = array_column($validMembers, 'PrimaryNumber');
+            $count  = count($phones);
+
+            if ($count === 1) {
+                $singleMember = $validMembers[0];
+                $singlePhone  = $singleMember['PrimaryNumber'];
+                $singleName   = trim($singleMember['FirstName'] . ' ' . $singleMember['LastName']);
+
+                $sent = SmsService::sendSms($singlePhone, $messageBody);
+                if (!$sent) {
+                    throw new RuntimeException("Message delivery failed to {$singleName} ({$singlePhone}). Check SMS logs.");
+                }
+
+                $_SESSION['msg_flash']      = "Message sent successfully to {$singleName} ({$singlePhone}).";
+                $_SESSION['msg_flash_type'] = 'success';
+            } else {
+                $result = SmsService::sendBulkSms($phones, $messageBody);
+                if (!$result['success']) {
+                    throw new RuntimeException('Bulk send failed: ' . ($result['error'] ?? 'Unknown error'));
+                }
+
+                $queued = $result['data']['queued'] ?? $count;
+                $_SESSION['msg_flash']      = "Message queued successfully for {$queued} selected member(s).";
+                $_SESSION['msg_flash_type'] = 'success';
             }
 
-            $name = trim($member['FirstName'] . ' ' . $member['LastName']);
-            $_SESSION['msg_flash']      = "Message sent to {$name} ({$phone}).";
-            $_SESSION['msg_flash_type'] = 'success';
+            header('Location: messages.php?tab=selected');
+            exit;
 
         } else {
             throw new InvalidArgumentException('Unknown action.');
@@ -121,6 +149,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         $_SESSION['msg_flash']      = $e->getMessage();
         $_SESSION['msg_flash_type'] = 'danger';
+        if ($action === 'selected' || $action === 'single') {
+            header('Location: messages.php?tab=selected');
+            exit;
+        }
     }
 
     header('Location: messages.php');
@@ -136,6 +168,7 @@ function he($v): string
 }
 
 $totalActive = count($members);
+$initialTab  = ($_GET['tab'] ?? '') === 'selected' ? 'selected' : 'bulk';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -186,7 +219,7 @@ $totalActive = count($members);
     .btn-send {
       background:#0b3b66; color:#fff; border:none; border-radius:8px;
       padding:12px 36px; font-weight:700; font-size:1rem; cursor:pointer;
-      transition:background .18s;
+      transition:background .18s, opacity .18s;
     }
     .btn-send:hover    { background:#0d4d85; }
     .btn-send:disabled { opacity:.55; cursor:not-allowed; }
@@ -205,6 +238,73 @@ $totalActive = count($members);
     .bg-green { background:#e6f4ea; }
     .msg-metric-val   { font-size:1.55rem; font-weight:800; color:#0b3b66; line-height:1.1; }
     .msg-metric-label { font-size:.74rem; color:#8ea2b8; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+
+    /* Member multi-select picker styles */
+    .member-picker-box {
+      border: 1px solid #dce5ee;
+      border-radius: 10px;
+      background: #fafbfc;
+      padding: 14px;
+    }
+    .member-scroll-list {
+      max-height: 270px;
+      overflow-y: auto;
+      border: 1px solid #e1e7ee;
+      border-radius: 8px;
+      background: #fff;
+      padding: 6px;
+    }
+    .member-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 3px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s ease;
+    }
+    .member-row:hover {
+      background: #f1f5fa;
+    }
+    .member-row.selected {
+      background: #e8f0fe;
+    }
+    .member-row.has-no-phone {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+    .member-chips-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 90px;
+      overflow-y: auto;
+      margin-top: 10px;
+      padding-top: 6px;
+      border-top: 1px dashed #e1e7ee;
+    }
+    .member-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #0b3b66;
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 600;
+      border-radius: 14px;
+      padding: 3px 10px;
+    }
+    .member-chip-close {
+      cursor: pointer;
+      font-size: .95rem;
+      line-height: 1;
+      opacity: .8;
+    }
+    .member-chip-close:hover {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -260,32 +360,32 @@ $totalActive = count($members);
 
         <!-- Tab switcher -->
         <div class="msg-tabs" role="tablist">
-          <button class="msg-tab-btn active" id="tab-bulk-btn"
-                  role="tab" aria-selected="true" aria-controls="panel-bulk"
+          <button class="msg-tab-btn <?= $initialTab === 'bulk' ? 'active' : '' ?>" id="tab-bulk-btn"
+                  role="tab" aria-selected="<?= $initialTab === 'bulk' ? 'true' : 'false' ?>" aria-controls="panel-bulk"
                   onclick="switchTab('bulk')">
             <span class="tab-icon">&#128226;</span>
             Broadcast to All Members
-            <span class="tab-sub">One message &rarr; every active member</span>
+            <span class="tab-sub">One message &rarr; every active member (<?= he($totalActive) ?>)</span>
           </button>
-          <button class="msg-tab-btn" id="tab-single-btn"
-                  role="tab" aria-selected="false" aria-controls="panel-single"
-                  onclick="switchTab('single')">
-            <span class="tab-icon">&#127919;</span>
-            Message a Specific Member
-            <span class="tab-sub">Target one member by name</span>
+          <button class="msg-tab-btn <?= $initialTab === 'selected' ? 'active' : '' ?>" id="tab-selected-btn"
+                  role="tab" aria-selected="<?= $initialTab === 'selected' ? 'true' : 'false' ?>" aria-controls="panel-selected"
+                  onclick="switchTab('selected')">
+            <span class="tab-icon">&#128101;</span>
+            Select Member(s)
+            <span class="tab-sub">Choose one or more specific members</span>
           </button>
         </div>
 
-        <!-- ═══════════════ PANEL 1 — BULK ═══════════════ -->
-        <div class="msg-panel active" id="panel-bulk" role="tabpanel" aria-labelledby="tab-bulk-btn">
+        <!-- ═══════════════ PANEL 1 — BROADCAST TO ALL ═══════════════ -->
+        <div class="msg-panel <?= $initialTab === 'bulk' ? 'active' : '' ?>" id="panel-bulk" role="tabpanel" aria-labelledby="tab-bulk-btn">
 
           <div class="alert alert-info d-flex align-items-start gap-2 py-2 mb-4" role="note">
             <span>&#8505;&#65039;</span>
             <div>
               Sends the <strong>same message</strong> to all
-              <strong><?= he($totalActive) ?> active member(s)</strong> using the
+              <strong><?= he($totalActive) ?> active member(s)</strong> in one operation using the
               <strong>OramMobile Bulk SMS API</strong>
-              (<code>POST /api/v1/messages/bulk</code>). Long messages are split automatically.
+              (<code>POST /api/v1/messages/bulk</code>). Long messages are automatically split.
             </div>
           </div>
 
@@ -329,78 +429,134 @@ $totalActive = count($members);
                   &#128226; Send to All <?= he($totalActive) ?> Member(s)
                 </button>
                 <?php if ($totalActive === 0): ?>
-                  <span class="text-danger small ms-3">No active members with phone numbers.</span>
+                  <span class="text-danger small ms-3">No active members found.</span>
                 <?php endif; ?>
               </div>
             </div>
           </form>
         </div><!-- /panel-bulk -->
 
-        <!-- ═══════════════ PANEL 2 — SINGLE ═══════════════ -->
-        <div class="msg-panel" id="panel-single" role="tabpanel" aria-labelledby="tab-single-btn">
-          <form method="post" id="form-single">
-            <input type="hidden" name="action" value="single">
+        <!-- ═══════════════ PANEL 2 — SELECT ONE OR MORE MEMBERS ═══════════════ -->
+        <div class="msg-panel <?= $initialTab === 'selected' ? 'active' : '' ?>" id="panel-selected" role="tabpanel" aria-labelledby="tab-selected-btn">
+
+          <div class="alert alert-light border d-flex align-items-start gap-2 py-2 mb-4" role="note">
+            <span>&#128161;</span>
+            <div>
+              Search and select <strong>one or multiple members</strong> below. You can also click <strong>Select All</strong> or search to filter specific members.
+              Single recipients use direct delivery; multiple recipients use the bulk delivery API.
+            </div>
+          </div>
+
+          <form method="post" id="form-selected" onsubmit="return validateSelectedForm()">
+            <input type="hidden" name="action" value="selected">
 
             <div class="row g-3">
-              <div class="col-md-6">
-                <label class="form-label fw-bold" for="member_id">Select Member</label>
-                <select
-                  class="form-select"
-                  id="member_id"
-                  name="member_id"
-                  onchange="updateSingleRecipient(this)"
-                  required
-                >
-                  <option value="">&#8212; Choose a member &#8212;</option>
-                  <?php foreach ($members as $m): ?>
-                    <option
-                      value="<?= he($m['MemberID']) ?>"
-                      data-phone="<?= he($m['PrimaryNumber']) ?>"
-                      data-name="<?= he(trim($m['FirstName'] . ' ' . $m['LastName'])) ?>"
-                    >
-                      <?= he(trim($m['FirstName'] . ' ' . $m['LastName'])) ?>
-                      (<?= he($m['NationalID']) ?> &middot; <?= he($m['PrimaryNumber']) ?>)
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
+              <div class="col-12">
+                <div class="member-picker-box">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <label class="form-label fw-bold mb-0">Select Recipient Members</label>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="recipient-badge">
+                        <span class="dot"></span>
+                        <span id="selected-counter-text">0 selected</span>
+                      </span>
+                      <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="selectAllEligible()">Select All</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary fw-semibold" onclick="clearAllSelections()">Clear All</button>
+                    </div>
+                  </div>
 
-              <div class="col-md-6 d-flex align-items-end">
-                <div id="single-phone-badge" style="display:none">
-                  <label class="form-label fw-bold d-block">Sending to</label>
-                  <span class="recipient-badge">
-                    <span class="dot"></span>
-                    <span id="single-phone-display">&#8212;</span>
-                  </span>
+                  <!-- Quick search filter -->
+                  <div class="input-group mb-2">
+                    <span class="input-group-text bg-white">&#128269;</span>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="memberSearchInput"
+                      placeholder="Type to filter by name, National ID, or phone number..."
+                      oninput="filterMemberList(this.value)"
+                    >
+                    <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('memberSearchInput').value=''; filterMemberList('');">Reset</button>
+                  </div>
+
+                  <!-- Member Checkbox List -->
+                  <div class="member-scroll-list" id="memberScrollList">
+                    <?php if (empty($members)): ?>
+                      <div class="text-muted p-3 text-center small">No active members found in the database.</div>
+                    <?php else: ?>
+                      <?php foreach ($members as $m): ?>
+                        <?php
+                          $name    = trim($m['FirstName'] . ' ' . $m['LastName']);
+                          $phone   = trim((string)($m['PrimaryNumber'] ?? ''));
+                          $natId   = trim((string)($m['NationalID'] ?? ''));
+                          $hasPhone = ($phone !== '');
+                          $searchStr = strtolower($name . ' ' . $natId . ' ' . $phone);
+                        ?>
+                        <label
+                          class="member-row <?= !$hasPhone ? 'has-no-phone' : '' ?>"
+                          data-search="<?= he($searchStr) ?>"
+                          data-name="<?= he($name) ?>"
+                          data-phone="<?= he($phone) ?>"
+                          data-id="<?= he($m['MemberID']) ?>"
+                          title="<?= !$hasPhone ? 'Member has no phone number on record' : '' ?>"
+                        >
+                          <div class="d-flex align-items-center gap-2">
+                            <input
+                              type="checkbox"
+                              name="member_ids[]"
+                              value="<?= he($m['MemberID']) ?>"
+                              class="form-check-input member-checkbox"
+                              <?= !$hasPhone ? 'disabled' : '' ?>
+                              onchange="onMemberCheckboxChange(this)"
+                            >
+                            <span class="member-name-text fw-semibold"><?= he($name) ?></span>
+                          </div>
+                          <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-light text-dark border">ID: <?= he($natId) ?></span>
+                            <?php if ($hasPhone): ?>
+                              <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><?= he($phone) ?></span>
+                            <?php else: ?>
+                              <span class="badge bg-danger-subtle text-danger border border-danger-subtle">No phone</span>
+                            <?php endif; ?>
+                          </div>
+                        </label>
+                      <?php endforeach; ?>
+                    <?php endif; ?>
+                  </div>
+
+                  <!-- Selected chips preview -->
+                  <div class="member-chips-wrap" id="memberChipsWrap" style="display:none;"></div>
                 </div>
               </div>
 
               <div class="col-12">
-                <label class="form-label fw-bold" for="single-msg">Message</label>
+                <label class="form-label fw-bold" for="selected-msg">Message</label>
                 <textarea
                   class="form-control"
-                  id="single-msg"
+                  id="selected-msg"
                   name="message_body"
                   rows="5"
                   maxlength="1600"
-                  placeholder="Type your personalised message here&#8230;"
-                  oninput="updateCounter(this,'single-counter','single-preview')"
+                  placeholder="Type your message for selected member(s) here&#8230;"
+                  oninput="updateCounter(this,'selected-counter','selected-preview')"
                   required
                 ></textarea>
-                <div class="char-counter" id="single-counter">0 / 160 (1 SMS part)</div>
+                <div class="char-counter" id="selected-counter">0 / 160 (1 SMS part)</div>
               </div>
 
               <div class="col-12">
                 <label class="form-label fw-bold">Live Preview</label>
-                <div class="sms-preview empty" id="single-preview">Your message will appear here&#8230;</div>
+                <div class="sms-preview empty" id="selected-preview">Your message will appear here&#8230;</div>
               </div>
 
               <div class="col-12">
-                <button class="btn-send" type="submit">&#127919; Send Message</button>
+                <button class="btn-send" type="submit" id="selected-send-btn" disabled>
+                  &#128101; Send to Selected Member(s)
+                </button>
+                <span class="text-muted small ms-3" id="selection-hint">Please select at least one member above.</span>
               </div>
             </div>
           </form>
-        </div><!-- /panel-single -->
+        </div><!-- /panel-selected -->
 
       </div><!-- /card-body -->
     </section>
@@ -408,47 +564,180 @@ $totalActive = count($members);
 
   <script>
     function switchTab(tab) {
-      ['bulk','single'].forEach(function(t) {
-        document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+      ['bulk','selected'].forEach(function(t) {
+        var panel = document.getElementById('panel-' + t);
+        if (panel) panel.classList.toggle('active', t === tab);
         var btn = document.getElementById('tab-' + t + '-btn');
-        btn.classList.toggle('active', t === tab);
-        btn.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+        if (btn) {
+          btn.classList.toggle('active', t === tab);
+          btn.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+        }
       });
+      if (window.history && window.history.replaceState) {
+        var url = new URL(window.location);
+        url.searchParams.set('tab', tab);
+        window.history.replaceState({}, '', url);
+      }
     }
 
     function updateCounter(textarea, counterId, previewId) {
       var len   = textarea.value.length;
       var parts = len === 0 ? 1 : Math.ceil(len / 160);
       var el    = document.getElementById(counterId);
-      el.textContent = len + ' / ' + (parts * 160) + ' (' + parts + ' SMS part' + (parts > 1 ? 's' : '') + ')';
-      el.classList.toggle('warn', len > 160);
-      var preview = document.getElementById(previewId);
-      if (textarea.value.trim() === '') {
-        preview.textContent = 'Your message will appear here\u2026';
-        preview.classList.add('empty');
-      } else {
-        preview.textContent = textarea.value;
-        preview.classList.remove('empty');
+      if (el) {
+        el.textContent = len + ' / ' + (parts * 160) + ' (' + parts + ' SMS part' + (parts > 1 ? 's' : '') + ')';
+        el.classList.toggle('warn', len > 160);
       }
-    }
-
-    function updateSingleRecipient(select) {
-      var opt   = select.options[select.selectedIndex];
-      var phone = opt ? (opt.getAttribute('data-phone') || '') : '';
-      var name  = opt ? (opt.getAttribute('data-name')  || '') : '';
-      var badge = document.getElementById('single-phone-badge');
-      var disp  = document.getElementById('single-phone-display');
-      if (phone) {
-        disp.textContent    = name + ' \u00b7 ' + phone;
-        badge.style.display = '';
-      } else {
-        badge.style.display = 'none';
+      var preview = document.getElementById(previewId);
+      if (preview) {
+        if (textarea.value.trim() === '') {
+          preview.textContent = 'Your message will appear here\u2026';
+          preview.classList.add('empty');
+        } else {
+          preview.textContent = textarea.value;
+          preview.classList.remove('empty');
+        }
       }
     }
 
     function confirmBulk() {
       var total = <?= (int)$totalActive ?>;
       return confirm('You are about to send an SMS to ALL ' + total + ' active member(s).\n\nContinue?');
+    }
+
+    /* ----------------------------------------------------
+     * Member multi-selection logic
+     * -------------------------------------------------- */
+    function filterMemberList(query) {
+      var q = query.trim().toLowerCase();
+      var rows = document.querySelectorAll('#memberScrollList .member-row');
+      rows.forEach(function(row) {
+        var search = row.getAttribute('data-search') || '';
+        if (q === '' || search.indexOf(q) !== -1) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
+    function onMemberCheckboxChange(cb) {
+      var row = cb.closest('.member-row');
+      if (row) {
+        row.classList.toggle('selected', cb.checked);
+      }
+      refreshSelectionState();
+    }
+
+    function selectAllEligible() {
+      var searchInput = document.getElementById('memberSearchInput');
+      var isFiltering = searchInput && searchInput.value.trim() !== '';
+
+      var rows = document.querySelectorAll('#memberScrollList .member-row');
+      rows.forEach(function(row) {
+        if (isFiltering && row.style.display === 'none') {
+          return; // Skip hidden rows if actively filtering
+        }
+        var cb = row.querySelector('.member-checkbox');
+        if (cb && !cb.disabled) {
+          cb.checked = true;
+          row.classList.add('selected');
+        }
+      });
+      refreshSelectionState();
+    }
+
+    function clearAllSelections() {
+      var rows = document.querySelectorAll('#memberScrollList .member-row');
+      rows.forEach(function(row) {
+        var cb = row.querySelector('.member-checkbox');
+        if (cb) {
+          cb.checked = false;
+        }
+        row.classList.remove('selected');
+      });
+      refreshSelectionState();
+    }
+
+    function unselectMember(memberId) {
+      var cb = document.querySelector('.member-checkbox[value="' + memberId + '"]');
+      if (cb) {
+        cb.checked = false;
+        var row = cb.closest('.member-row');
+        if (row) row.classList.remove('selected');
+      }
+      refreshSelectionState();
+    }
+
+    function refreshSelectionState() {
+      var checkedCbs = document.querySelectorAll('.member-checkbox:checked');
+      var count = checkedCbs.length;
+
+      var counterEl = document.getElementById('selected-counter-text');
+      if (counterEl) {
+        counterEl.textContent = count + ' selected';
+      }
+
+      var sendBtn = document.getElementById('selected-send-btn');
+      var hintEl  = document.getElementById('selection-hint');
+      if (sendBtn) {
+        sendBtn.disabled = (count === 0);
+        if (count === 0) {
+          sendBtn.innerHTML = '&#128101; Send to Selected Member(s)';
+          if (hintEl) hintEl.textContent = 'Please select at least one member above.';
+        } else if (count === 1) {
+          sendBtn.innerHTML = '&#128101; Send to 1 Member';
+          if (hintEl) hintEl.textContent = 'Will be sent via single SMS.';
+        } else {
+          sendBtn.innerHTML = '&#128101; Send to ' + count + ' Selected Members';
+          if (hintEl) hintEl.textContent = 'Will be sent via Bulk SMS API.';
+        }
+      }
+
+      // Render chips
+      var chipsWrap = document.getElementById('memberChipsWrap');
+      if (chipsWrap) {
+        if (count === 0) {
+          chipsWrap.innerHTML = '';
+          chipsWrap.style.display = 'none';
+        } else {
+          chipsWrap.style.display = 'flex';
+          var html = '';
+          var maxShow = 15;
+          var shown = 0;
+          checkedCbs.forEach(function(cb) {
+            if (shown >= maxShow) return;
+            var row = cb.closest('.member-row');
+            var name = row ? row.getAttribute('data-name') : 'Member';
+            var id = cb.value;
+            html += '<span class="member-chip">' +
+                    escapeHtml(name) +
+                    ' <span class="member-chip-close" onclick="unselectMember(\'' + id + '\')" title="Remove">&times;</span>' +
+                    '</span>';
+            shown++;
+          });
+          if (count > maxShow) {
+            html += '<span class="badge bg-secondary align-self-center">+' + (count - maxShow) + ' more</span>';
+          }
+          chipsWrap.innerHTML = html;
+        }
+      }
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m];
+      });
+    }
+
+    function validateSelectedForm() {
+      var checkedCbs = document.querySelectorAll('.member-checkbox:checked');
+      if (checkedCbs.length === 0) {
+        alert('Please select at least one member before sending.');
+        return false;
+      }
+      var count = checkedCbs.length;
+      return confirm('Are you sure you want to send this message to ' + count + ' selected member(s)?');
     }
   </script>
 </body>
