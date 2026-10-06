@@ -25,6 +25,7 @@ if (!function_exists('admin_header')) {
                     'withdrawal_logs' => ['label' => 'Withdrawal Logs', 'url' => 'withdrawal_logs.php'],
                 ]
             ],
+            'messages' => ['label' => 'Messages', 'url' => 'messages.php'],
             'settings' => ['label' => 'Settings', 'url' => 'settings.php'],
         ];
         $shellClass = $wide ? 'admin-shell' : 'admin-shell admin-shell--narrow';
