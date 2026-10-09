@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
         $randomAd = $adPromos[array_rand($adPromos)];
 
         $fullName = trim($member['FirstName'] . ' ' . $member['LastName']);
-        $displayDate = date('d-M-Y H:i', strtotime($formattedDate));
+        $displayDate = date('d-M-Y', strtotime($formattedDate));
         $smsMsg = "Dear {$fullName}, a withdrawal of " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Your new current savings balance is " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
         SmsService::sendSms($member['PrimaryNumber'], $smsMsg);
 

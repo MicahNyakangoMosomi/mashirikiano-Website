@@ -80,7 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_loan'])) {
         $message = "Your loan application for $loanType of KES " . number_format($amount, 2) . " has been submitted successfully!";
 
         // Send SMS to member
-        $smsMsg = "Dear " . $member['FirstName'] . ", your application for " . $loanType . " of KES " . number_format($amount, 2) . " repayable by " . $returnDate . " has been received. Feedback will be given as soon as possible. Thank you.";
+        $formattedReturnDate = !empty($returnDate) ? date('d-M-Y', strtotime($returnDate)) : $returnDate;
+        $smsMsg = "Dear " . $member['FirstName'] . ", your application for " . $loanType . " of KES " . number_format($amount, 2) . " repayable by " . $formattedReturnDate . " has been received. Feedback will be given as soon as possible. Thank you.";
         SmsService::sendSms($member['PrimaryNumber'], $smsMsg);
         
         $_SESSION['flash_message'] = $message;

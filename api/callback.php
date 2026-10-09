@@ -158,7 +158,8 @@ try {
         }
         $allocationText = $allocation ? ' Allocation: ' . implode(', ', $allocation) . '.' : '';
 
-        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} at {$tranTime}.{$allocationText} Total Contributions: KES " . number_format($totalContribution, 2) . ". Net Savings: KES " . number_format($netSavings, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
+        $tranDate = !empty($data['TranTime']) ? date('d-M-Y', strtotime($data['TranTime'])) : date('d-M-Y');
+        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} on {$tranDate}.{$allocationText} Total Contributions: KES " . number_format($totalContribution, 2) . ". Net Savings: KES " . number_format($netSavings, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
         if ($memberPhone !== '') {
