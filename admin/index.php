@@ -178,7 +178,7 @@ $transactionStats = $pdo->query(
 )->fetch() ?: [];
 
 $depositStats = $pdo->query(
-    'SELECT COALESCE(SUM(PaidAmount), 0) AS ShareCapital FROM deposits'
+    'SELECT COALESCE(SUM(PaidAmount), 0) AS EntranceFeesReserve FROM deposits'
 )->fetch() ?: [];
 
 $loanStats = $pdo->query(
@@ -198,7 +198,8 @@ $totalContributing = (float)($transactionStats['TotalContributing'] ?? 0);
 $totalWithdrawals = (float)($transactionStats['TotalWithdrawals'] ?? 0);
 $netSavings = max(0.0, $totalContributing - $totalWithdrawals);
 $withdrawalRate = $totalContributing > 0 ? min(100, ($totalWithdrawals / $totalContributing) * 100) : 0;
-$shareCapital = (float)($depositStats['ShareCapital'] ?? 0);
+$entranceFeesReserve = (float)($depositStats['EntranceFeesReserve'] ?? 0);
+$shareCapital = $entranceFeesReserve;
 $activeLoans = (int)($loanStats['ActiveLoans'] ?? 0);
 $loanPortfolio = (float)($loanStats['LoanPortfolio'] ?? 0);
 $pendingLoans = (int)($loanStats['PendingLoans'] ?? 0);
@@ -398,8 +399,8 @@ $months = hydrateMonthly(
         <div class="bi-metric-note">Contributing less withdrawals</div>
       </div>
       <div class="bi-metric purple">
-        <div class="bi-metric-label">Share Capital</div>
-        <div class="bi-metric-value"><?= e(moneyShort($shareCapital)) ?></div>
+        <div class="bi-metric-label">Entrance Fees Reserve</div>
+        <div class="bi-metric-value"><?= e(moneyShort($entranceFeesReserve)) ?></div>
         <div class="bi-metric-note">Based on paid deposits</div>
       </div>
       <div class="bi-metric orange">
