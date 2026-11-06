@@ -347,8 +347,6 @@ $activeMembers = $membersStmt->fetchAll();
     .table-custom th { background-color: #f8f9fa; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
     .table-custom td { vertical-align: middle; }
     .modal-header-transfer { background: linear-gradient(135deg, #1d72d2 0%, #0d47a1 100%); color: white; }
-    .badge-akiba { background-color: #e7f5ed; color: #087a43; border: 1px solid #c3e6cb; }
-    .badge-ushirika { background-color: #f3e8ff; color: #7c3aed; border: 1px solid #ddd6fe; }
     .transfer-arrow { color: #64748b; font-size: 1.1rem; }
   </style>
 </head>
@@ -372,7 +370,7 @@ $activeMembers = $membersStmt->fetchAll();
       <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
         <div>
           <h2 class="h5 mb-0 fw-bold text-dark">Transfer Member Credit</h2>
-          <div class="text-muted small">Select an active member to move credit between Akiba Wallet and Ushirika Shares.</div>
+          <div class="text-muted small">Select an active member to move credit between <span class="wallet-akiba">Akiba Wallet</span> and <span class="wallet-ushirika">Ushirika Shares</span>.</div>
         </div>
         <form class="d-flex gap-2" method="GET" action="credit_transfer.php">
           <div class="input-group input-group-sm">
@@ -394,8 +392,8 @@ $activeMembers = $membersStmt->fetchAll();
                 <th>Full Name</th>
                 <th>National ID</th>
                 <th>Phone Number</th>
-                <th class="text-end">Current Akiba</th>
-                <th class="text-end">Current Ushirika</th>
+                <th class="text-end wallet-akiba">Current Akiba</th>
+                <th class="text-end wallet-ushirika">Current Ushirika</th>
                 <th class="text-center pe-3">Action</th>
               </tr>
             </thead>
@@ -422,8 +420,8 @@ $activeMembers = $membersStmt->fetchAll();
                     <td class="fw-bold"><?= $mName ?></td>
                     <td><?= $mNatId ?></td>
                     <td><?= $mPhone ?></td>
-                    <td class="text-end text-success font-monospace fw-bold">KES <?= number_format($akiba, 2) ?></td>
-                    <td class="text-end font-monospace fw-bold" style="color:#7c3aed;">KES <?= number_format($ushirika, 2) ?></td>
+                    <td class="text-end font-monospace fw-bold wallet-akiba">KES <?= number_format($akiba, 2) ?></td>
+                    <td class="text-end font-monospace fw-bold wallet-ushirika">KES <?= number_format($ushirika, 2) ?></td>
                     <td class="text-center pe-3">
                       <button type="button"
                               class="btn btn-sm btn-primary px-3 shadow-sm btn-transfer-trigger"
@@ -503,14 +501,14 @@ $activeMembers = $membersStmt->fetchAll();
               <div class="row g-2 text-center">
                 <div class="col-6">
                   <div class="p-2 border rounded bg-white">
-                    <span class="d-block text-muted small">Current Akiba</span>
-                    <strong class="text-success font-monospace" id="modalAkibaDisplay">KES 0.00</strong>
+                    <span class="d-block small wallet-akiba">Current Akiba</span>
+                    <strong class="font-monospace wallet-akiba" id="modalAkibaDisplay">KES 0.00</strong>
                   </div>
                 </div>
                 <div class="col-6">
                   <div class="p-2 border rounded bg-white">
-                    <span class="d-block text-muted small">Current Ushirika</span>
-                    <strong style="color:#7c3aed;" class="font-monospace" id="modalUshirikaDisplay">KES 0.00</strong>
+                    <span class="d-block small wallet-ushirika">Current Ushirika</span>
+                    <strong class="font-monospace wallet-ushirika" id="modalUshirikaDisplay">KES 0.00</strong>
                   </div>
                 </div>
               </div>
@@ -520,11 +518,11 @@ $activeMembers = $membersStmt->fetchAll();
             <div class="mb-3">
               <label for="transferToSelect" class="form-label fw-bold">Transfer To: <span class="text-danger">*</span></label>
               <select name="transfer_to" id="transferToSelect" class="form-select form-select-lg fw-semibold" required>
-                <option value="ushirika" selected>Ushirika Shares (Transfer from Akiba Wallet)</option>
-                <option value="akiba">Akiba Wallet (Transfer from Ushirika Shares)</option>
+                <option value="ushirika" selected style="color:#489a12;">Ushirika Shares (Transfer from Akiba Wallet)</option>
+                <option value="akiba" style="color:#e47001;">Akiba Wallet (Transfer from Ushirika Shares)</option>
               </select>
               <div class="form-text text-muted" id="sourceHint">
-                Source wallet: <span class="fw-bold text-success">Akiba Wallet</span>
+                Source wallet: <span class="fw-bold wallet-akiba">Akiba Wallet</span>
               </div>
             </div>
 
@@ -581,8 +579,8 @@ $activeMembers = $membersStmt->fetchAll();
           <p class="mb-3">Are you sure you want to execute this transfer? This action will immediately adjust the member's wallet balances and send an SMS notification.</p>
           <div class="p-3 bg-light rounded border">
             <div class="mb-2"><strong>Member:</strong> <span id="confMemberName"></span> (<span id="confMemberId"></span>)</div>
-            <div class="mb-2"><strong>Transfer Direction:</strong> <span id="confDirection" class="badge bg-primary"></span></div>
-            <div class="mb-2"><strong>Transfer Amount:</strong> <span class="h5 fw-bold text-success font-monospace mb-0" id="confAmount"></span></div>
+            <div class="mb-2"><strong>Transfer Direction:</strong> <span id="confDirection" class="d-inline-flex align-items-center gap-1"></span></div>
+            <div class="mb-2"><strong>Transfer Amount:</strong> <span class="h5 fw-bold text-primary font-monospace mb-0" id="confAmount"></span></div>
             <div><strong>Authorized By:</strong> <span><?= e($adminName) ?></span></div>
           </div>
         </div>
@@ -657,10 +655,10 @@ $activeMembers = $membersStmt->fetchAll();
       function updateDirectionHint() {
         const to = transferToSelect.value;
         if (to === 'ushirika') {
-          sourceHint.innerHTML = 'Source wallet: <span class="fw-bold text-success">Akiba Wallet</span> (Available: KES ' + currentAkiba.toFixed(2) + ')';
+          sourceHint.innerHTML = 'Source wallet: <span class="fw-bold wallet-akiba">Akiba Wallet</span> (Available: KES ' + currentAkiba.toFixed(2) + ')';
           transferAmount.max = currentAkiba;
         } else {
-          sourceHint.innerHTML = 'Source wallet: <span class="fw-bold" style="color:#7c3aed;">Ushirika Shares</span> (Available: KES ' + currentUshirika.toFixed(2) + ')';
+          sourceHint.innerHTML = 'Source wallet: <span class="fw-bold wallet-ushirika">Ushirika Shares</span> (Available: KES ' + currentUshirika.toFixed(2) + ')';
           transferAmount.max = currentUshirika;
         }
         validateAmount();
@@ -697,11 +695,11 @@ $activeMembers = $membersStmt->fetchAll();
 
         const amt = parseFloat(transferAmount.value) || 0;
         const to = transferToSelect.value;
-        const dirText = (to === 'ushirika') ? 'Akiba Wallet → Ushirika Shares' : 'Ushirika Shares → Akiba Wallet';
-
         confMemberName.textContent = currentMemberName;
         confMemberId.textContent = currentMemberIdVal;
-        confDirection.textContent = dirText;
+        confDirection.innerHTML = (to === 'ushirika')
+          ? '<span class="badge badge-akiba">Akiba Wallet</span><i class="bi bi-arrow-right text-muted"></i><span class="badge badge-ushirika">Ushirika Shares</span>'
+          : '<span class="badge badge-ushirika">Ushirika Shares</span><i class="bi bi-arrow-right text-muted"></i><span class="badge badge-akiba">Akiba Wallet</span>';
         confAmount.textContent = 'KES ' + amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         transferModal.hide();

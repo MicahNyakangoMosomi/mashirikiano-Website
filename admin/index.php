@@ -310,6 +310,8 @@ $months = hydrateMonthly(
     .bi-metric.orange { border-left-color: #f97316; }
     .bi-metric.purple { border-left-color: #7c3aed; }
     .bi-metric.blue { border-left-color: #1d72d2; }
+    .bi-metric.akiba { border-left-color: #e47001; }
+    .bi-metric.ushirika { border-left-color: #489a12; }
     .bi-metric.red { border-left-color: #dc2626; }
     .bi-metric-label {
       color: #667085;
@@ -427,14 +429,14 @@ $months = hydrateMonthly(
         <div class="bi-metric-value"><?= e(moneyShort($totalContributing)) ?></div>
         <div class="bi-metric-note"><?= e(moneyShort($thisMonthSavings)) ?> saved this month</div>
       </div>
-      <div class="bi-metric blue">
-        <div class="bi-metric-label">Akiba Wallet (Net Savings)</div>
-        <div class="bi-metric-value"><?= e(moneyShort($netSavings)) ?></div>
+      <div class="bi-metric akiba">
+        <div class="bi-metric-label wallet-akiba">Akiba Wallet (Net Savings)</div>
+        <div class="bi-metric-value wallet-akiba"><?= e(moneyShort($netSavings)) ?></div>
         <div class="bi-metric-note">Akiba funds less withdrawals</div>
       </div>
-      <div class="bi-metric purple">
-        <div class="bi-metric-label">Ushirika Shares</div>
-        <div class="bi-metric-value"><?= e(moneyShort($totalUshirika)) ?></div>
+      <div class="bi-metric ushirika">
+        <div class="bi-metric-label wallet-ushirika">Ushirika Shares</div>
+        <div class="bi-metric-value wallet-ushirika"><?= e(moneyShort($totalUshirika)) ?></div>
         <div class="bi-metric-note">5% allocated member shares</div>
       </div>
       <div class="bi-metric purple">

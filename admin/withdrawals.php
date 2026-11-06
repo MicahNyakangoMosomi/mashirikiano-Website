@@ -343,8 +343,8 @@ $totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
         <div class="card card-metric shadow-sm bg-white p-3">
           <div class="d-flex align-items-center justify-content-between">
             <div>
-              <div class="text-muted small text-uppercase fw-bold">Akiba Wallet Pool</div>
-              <div class="h3 fw-bold mb-0 text-success"><?= number_format($totalAkibaWallet, 2) ?></div>
+              <div class="small text-uppercase fw-bold wallet-akiba">Akiba Wallet Pool</div>
+              <div class="h3 fw-bold mb-0 wallet-akiba"><?= number_format($totalAkibaWallet, 2) ?></div>
               <div class="small text-muted" style="font-size:0.75rem;">95% savings less withdrawals</div>
             </div>
           </div>
@@ -354,8 +354,8 @@ $totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
         <div class="card card-metric shadow-sm bg-white p-3">
           <div class="d-flex align-items-center justify-content-between">
             <div>
-              <div class="text-muted small text-uppercase fw-bold">Ushirika Shares (5%)</div>
-              <div class="h3 fw-bold mb-0" style="color:#7c3aed;"><?= number_format($allUshirika, 2) ?></div>
+              <div class="small text-uppercase fw-bold wallet-ushirika">Ushirika Shares (5%)</div>
+              <div class="h3 fw-bold mb-0 wallet-ushirika"><?= number_format($allUshirika, 2) ?></div>
               <div class="small text-muted" style="font-size:0.75rem;">Retained member shares</div>
             </div>
           </div>
@@ -400,8 +400,8 @@ $totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
                 <th>Full Name</th>
                 <th>National ID</th>
                 <th>Phone Number</th>
-                <th class="text-end">Akiba Wallet</th>
-                <th class="text-end">Ushirika Shares</th>
+                <th class="text-end wallet-akiba">Akiba Wallet</th>
+                <th class="text-end wallet-ushirika">Ushirika Shares</th>
                 <th class="text-end">Total Withdrawn</th>
                 <th class="text-center pe-3">Action</th>
               </tr>
@@ -430,8 +430,8 @@ $totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
                     <td class="fw-bold"><?= $mName ?></td>
                     <td><?= $mNatId ?></td>
                     <td><?= $mPhone ?></td>
-                    <td class="text-end text-success font-monospace fw-bold"><?= number_format($akiba, 2) ?></td>
-                    <td class="text-end font-monospace" style="color:#7c3aed;"><?= number_format($ushirika, 2) ?></td>
+                    <td class="text-end font-monospace fw-bold wallet-akiba"><?= number_format($akiba, 2) ?></td>
+                    <td class="text-end font-monospace wallet-ushirika"><?= number_format($ushirika, 2) ?></td>
                     <td class="text-end text-danger font-monospace"><?= number_format($withd, 2) ?></td>
                     <td class="text-center pe-3">
                       <button type="button"
@@ -525,8 +525,8 @@ $totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
               </div>
               <hr class="my-2">
               <div class="d-flex align-items-center justify-content-between">
-                <span class="fw-semibold text-dark">Available Akiba Wallet:</span>
-                <span class="fs-5 fw-bold text-success font-monospace" id="modalSavingsDisplay">0.00</span>
+                <span class="fw-semibold wallet-akiba">Available Akiba Wallet:</span>
+                <span class="fs-5 fw-bold wallet-akiba font-monospace" id="modalSavingsDisplay">0.00</span>
               </div>
             </div>
 

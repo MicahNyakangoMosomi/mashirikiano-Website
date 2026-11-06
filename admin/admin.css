@@ -5,6 +5,29 @@ body {
   transition: padding-left .2s ease;
 }
 
+.wallet-akiba { color: #e47001 !important; }
+.wallet-ushirika { color: #489a12 !important; }
+.badge-akiba {
+  display: inline-block;
+  background: #e47001;
+  border: 1px solid #e47001;
+  border-radius: .4em;
+  color: #fff;
+  font-size: .78em;
+  font-weight: 600;
+  padding: .25em .55em;
+}
+.badge-ushirika {
+  display: inline-block;
+  background: #489a12;
+  border: 1px solid #489a12;
+  border-radius: .4em;
+  color: #fff;
+  font-size: .78em;
+  font-weight: 600;
+  padding: .25em .55em;
+}
+
 body.admin-sidebar-collapsed {
   padding-left: 84px;
 }

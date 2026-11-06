@@ -68,8 +68,8 @@ if (($_GET['download'] ?? '') === 'pdf') {
     }
 
     $pdfStmt = $pdo->prepare("
-        SELECT ct.*,
-               m.FirstName, m.LastName, m.PrimaryNumber
+        SELECT ct.TransferCode, ct.MemberID, ct.TransferFrom, ct.TransferTo,
+               ct.Amount, ct.CreatedAt, m.FirstName, m.LastName
         FROM   credit_transfers ct
         LEFT JOIN members m ON m.MemberID = ct.MemberID
         {$pdfWhere}
@@ -81,22 +81,22 @@ if (($_GET['download'] ?? '') === 'pdf') {
     SimplePdfTable::download(
         'credit-transfer-logs-report.pdf',
         'SACCO Credit Transfer Audit Log',
-        ['Ref Code', 'Member', 'NatID', 'Direction', 'Amount (KES)',
-         'Akiba Before', 'Akiba After', 'Ushirika Before', 'Ushirika After',
-         'Admin', 'Date'],
-        array_map(fn($r) => [
-            $r['TransferCode'],
-            trim(($r['FirstName'] ?? '') . ' ' . ($r['LastName'] ?? '')) ?: $r['MemberID'],
-            $r['NationalID'],
-            strtoupper($r['TransferFrom']) . ' → ' . strtoupper($r['TransferTo']),
-            number_format((float)$r['Amount'], 2),
-            number_format((float)$r['PreviousAkiba'], 2),
-            number_format((float)$r['NewAkiba'], 2),
-            number_format((float)$r['PreviousUshirika'], 2),
-            number_format((float)$r['NewUshirika'], 2),
-            $r['AdminName'] ?? '—',
-            date('d M Y H:i', strtotime($r['CreatedAt'])),
-        ], $pdfRows)
+        ['#', 'Ref Code', 'Member', 'Direction', 'Amount (KES)', 'Date & Time (EAT)'],
+        array_map(function ($r, $index) {
+            $memberName = trim(($r['FirstName'] ?? '') . ' ' . ($r['LastName'] ?? ''));
+            if ($memberName === '') {
+                $memberName = $r['MemberID'];
+            }
+
+            return [
+                $index + 1,
+                $r['TransferCode'],
+                $memberName . ' (' . $r['MemberID'] . ')',
+                strtoupper($r['TransferFrom']) . ' -> ' . strtoupper($r['TransferTo']),
+                number_format((float)$r['Amount'], 2),
+                date('d M Y H:i', strtotime($r['CreatedAt'])),
+            ];
+        }, $pdfRows, array_keys($pdfRows))
     );
     exit;
 }
@@ -133,8 +133,8 @@ $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
 // Fetch page rows
 $stmt = $pdo->prepare("
-    SELECT ct.*,
-           m.FirstName, m.LastName, m.PrimaryNumber
+    SELECT ct.TransferCode, ct.MemberID, ct.TransferFrom, ct.TransferTo,
+           ct.Amount, ct.CreatedAt, m.FirstName, m.LastName
     FROM   credit_transfers ct
     LEFT JOIN members m ON m.MemberID = ct.MemberID
     {$where}
@@ -176,8 +176,6 @@ $metrics = $pdo->query("
     .ctl-metric { text-align:center; }
     .ctl-metric .val { font-size:1.5rem; font-weight:700; color:#0d6efd; }
     .ctl-metric .lbl { font-size:.8rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; }
-    .badge-akiba { background:#e7f5ed; color:#087a43; border:1px solid #c3e6cb; padding:.25em .55em; border-radius:.4em; font-size:.78em; }
-    .badge-ushirika { background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; padding:.25em .55em; border-radius:.4em; font-size:.78em; }
     .arrow-sep { margin:0 .3em; color:#64748b; }
     .tbl-sm td, .tbl-sm th { font-size:.82rem; padding:.55rem .65rem; vertical-align:middle; }
     .search-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
@@ -200,7 +198,7 @@ $metrics = $pdo->query("
   <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
       <h1 class="h3 mb-1 fw-bold text-dark">Credit Transfer Logs</h1>
-      <p class="text-muted mb-0" style="font-size:.85rem;">Complete history of all Akiba ↔ Ushirika credit transfers</p>
+      <p class="text-muted mb-0" style="font-size:.85rem;">Complete history of transfers between <span class="wallet-akiba">Akiba</span> and <span class="wallet-ushirika">Ushirika</span>.</p>
     </div>
     <div class="d-flex gap-2">
       <a href="?<?= http_build_query(array_merge($_GET, ['download' => 'pdf'])) ?>" class="btn btn-danger fw-semibold shadow-sm">
@@ -224,15 +222,15 @@ $metrics = $pdo->query("
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric" style="border-top:3px solid #198754;">
-        <div class="val" style="color:#198754;">KES <?= number_format((float)$metrics['akiba_to_ushirika'], 2) ?></div>
-        <div class="lbl">Akiba → Ushirika</div>
+      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric" style="border-top:3px solid #e47001;">
+        <div class="val wallet-akiba">KES <?= number_format((float)$metrics['akiba_to_ushirika'], 2) ?></div>
+        <div class="lbl"><span class="wallet-akiba">Akiba</span> → <span class="wallet-ushirika">Ushirika</span></div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric" style="border-top:3px solid #6610f2;">
-        <div class="val" style="color:#6610f2;">KES <?= number_format((float)$metrics['ushirika_to_akiba'], 2) ?></div>
-        <div class="lbl">Ushirika → Akiba</div>
+      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric" style="border-top:3px solid #489a12;">
+        <div class="val wallet-ushirika">KES <?= number_format((float)$metrics['ushirika_to_akiba'], 2) ?></div>
+        <div class="lbl"><span class="wallet-ushirika">Ushirika</span> → <span class="wallet-akiba">Akiba</span></div>
       </div>
     </div>
   </div>
@@ -269,13 +267,7 @@ $metrics = $pdo->query("
               <th>Member</th>
               <th>Direction</th>
               <th class="text-end">Amount (KES)</th>
-              <th class="text-end">Akiba Before</th>
-              <th class="text-end">Akiba After</th>
-              <th class="text-end">Ushirika Before</th>
-              <th class="text-end">Ushirika After</th>
-              <th>Authorized By</th>
-              <th>Notes</th>
-              <th>Date &amp; Time</th>
+              <th>Date &amp; Time (EAT)</th>
             </tr>
           </thead>
           <tbody>
@@ -289,9 +281,7 @@ $metrics = $pdo->query("
                 <td><code style="font-size:.78rem;"><?= ctl_e($t['TransferCode']) ?></code></td>
                 <td>
                   <strong><?= ctl_e($memberName) ?></strong><br>
-                  <span class="text-muted" style="font-size:.75rem;">
-                    <?= ctl_e($t['MemberID']) ?> &middot; NatID: <?= ctl_e($t['NationalID']) ?>
-                  </span>
+                  <span class="text-muted small"><?= ctl_e($t['MemberID']) ?></span>
                 </td>
                 <td>
                   <?php if ($isAkibaToUsh): ?>
@@ -304,25 +294,7 @@ $metrics = $pdo->query("
                     <span class="badge-akiba">Akiba</span>
                   <?php endif; ?>
                 </td>
-                <td class="text-end fw-semibold"><?= number_format((float)$t['Amount'], 2) ?></td>
-                <td class="text-end"><?= number_format((float)$t['PreviousAkiba'], 2) ?></td>
-                <td class="text-end <?= $isAkibaToUsh ? 'text-danger' : 'text-success' ?>">
-                  <?= number_format((float)$t['NewAkiba'], 2) ?>
-                </td>
-                <td class="text-end"><?= number_format((float)$t['PreviousUshirika'], 2) ?></td>
-                <td class="text-end <?= !$isAkibaToUsh ? 'text-danger' : 'text-success' ?>">
-                  <?= number_format((float)$t['NewUshirika'], 2) ?>
-                </td>
-                <td><?= ctl_e($t['AdminName'] ?? '—') ?></td>
-                <td>
-                  <?php if (!empty($t['Notes'])): ?>
-                    <span title="<?= ctl_e($t['Notes']) ?>" style="cursor:help; font-size:.8rem;">
-                      <?= ctl_e(mb_substr($t['Notes'], 0, 30)) ?><?= mb_strlen($t['Notes']) > 30 ? '…' : '' ?>
-                    </span>
-                  <?php else: ?>
-                    <span class="text-muted">—</span>
-                  <?php endif; ?>
-                </td>
+                <td class="text-end fw-semibold font-monospace">KES <?= number_format((float)$t['Amount'], 2) ?></td>
                 <td style="white-space:nowrap;"><?= ctl_e(date('d M Y H:i', strtotime($t['CreatedAt']))) ?></td>
               </tr>
             <?php endforeach; ?>

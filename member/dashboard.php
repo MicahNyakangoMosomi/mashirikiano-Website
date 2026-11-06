@@ -310,6 +310,10 @@ function dashboardUrl(array $params): string
     .profile-detail .value { display: block; color: #fff; font-weight: 700; overflow-wrap: anywhere; }
     .metric { border: 0; border-radius: 8px; box-shadow: 0 10px 30px rgba(20, 55, 38, .08); }
     .metric-icon { width: 38px; height: 38px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #e7f5ed; color: #087a43; }
+    .wallet-akiba { color: #e47001 !important; }
+    .wallet-ushirika { color: #489a12 !important; }
+    .metric-icon.wallet-akiba { background: #fff0e2; }
+    .metric-icon.wallet-ushirika { background: #edf6e7; }
     .metric-icon.danger { background: #fdeaea; color: #c03232; }
     .recent-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edf2ef; }
     .recent-row:last-child { border-bottom: 0; }
@@ -416,24 +420,24 @@ function dashboardUrl(array $params): string
 
         <div class="row g-3 mb-4">
           <div class="col-md-6 col-lg-4">
-            <div class="card metric h-100" style="border-left: 4px solid #218c74;">
+            <div class="card metric h-100" style="border-left: 4px solid #e47001;">
               <div class="card-body d-flex align-items-center gap-3">
-                <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
+                <span class="metric-icon wallet-akiba"><i class="bi bi-wallet2"></i></span>
                 <div>
-                  <div class="text-muted small text-uppercase fw-bold">Current Akiba Amount</div>
-                  <div class="h3 fw-bold mb-0 text-success">KES <?= number_format($akibaWallet, 2) ?></div>
+                  <div class="small text-uppercase fw-bold wallet-akiba">Current Akiba Amount</div>
+                  <div class="h3 fw-bold mb-0 wallet-akiba">KES <?= number_format($akibaWallet, 2) ?></div>
                   <div class="small text-muted" style="font-size:0.75rem;">Available everyday net savings (95%)</div>
                 </div>
               </div>
             </div>
           </div>
           <div class="col-md-6 col-lg-4">
-            <div class="card metric h-100" style="border-left: 4px solid #7c3aed;">
+            <div class="card metric h-100" style="border-left: 4px solid #489a12;">
               <div class="card-body d-flex align-items-center gap-3">
-                <span class="metric-icon" style="background:#f3e8ff; color:#7c3aed;"><i class="bi bi-pie-chart"></i></span>
+                <span class="metric-icon wallet-ushirika"><i class="bi bi-pie-chart"></i></span>
                 <div>
-                  <div class="text-muted small text-uppercase fw-bold">Ushirika Amount</div>
-                  <div class="h3 fw-bold mb-0" style="color:#7c3aed;">KES <?= number_format($totalUshirika, 2) ?></div>
+                  <div class="small text-uppercase fw-bold wallet-ushirika">Ushirika Amount</div>
+                  <div class="h3 fw-bold mb-0 wallet-ushirika">KES <?= number_format($totalUshirika, 2) ?></div>
                   <div class="small text-muted" style="font-size:0.75rem;">Retained cooperative member shares (5%)</div>
                 </div>
               </div>
