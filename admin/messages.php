@@ -21,20 +21,39 @@ if (isset($_SESSION['msg_flash'])) {
 }
 
 /* -------------------------------------------------------
- * Fetch all active members
+ * Fetch eligible members and broadcast recipient counts
  * ----------------------------------------------------- */
 $members = [];
+$memberCounts = ['Active' => 0, 'Pending' => 0];
+$recipientCounts = ['Active' => 0, 'Pending' => 0];
 try {
     $stmt = $pdo->query(
-        "SELECT MemberID, NationalID, FirstName, LastName, PrimaryNumber
+        "SELECT MemberID, NationalID, FirstName, LastName, PrimaryNumber, Status
          FROM members
-         WHERE Status = 'Active'
+         WHERE Status IN ('Active', 'Pending')
          ORDER BY FirstName, LastName"
     );
     $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $countStmt = $pdo->query(
+        "SELECT Status, COUNT(*) AS MemberCount,
+                SUM(CASE WHEN PrimaryNumber IS NOT NULL AND TRIM(PrimaryNumber) <> '' THEN 1 ELSE 0 END) AS RecipientCount
+         FROM members
+         WHERE Status IN ('Active', 'Pending')
+         GROUP BY Status"
+    );
+    foreach ($countStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $memberCounts[$row['Status']] = (int)$row['MemberCount'];
+        $recipientCounts[$row['Status']] = (int)$row['RecipientCount'];
+    }
 } catch (Throwable $e) {
     error_log('messages.php member fetch: ' . $e->getMessage());
 }
+$totalActive = $memberCounts['Active'];
+$totalPending = $memberCounts['Pending'];
+$activeRecipients = $recipientCounts['Active'];
+$pendingRecipients = $recipientCounts['Pending'];
+$totalEligibleRecipients = $activeRecipients + $pendingRecipients;
 
 /* -------------------------------------------------------
  * POST handler
@@ -56,16 +75,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          * Body: { sender_id, phones: [...], message }
          * --------------------------------------------- */
         if ($action === 'bulk') {
+            $recipientGroup = strtolower(trim((string)($_POST['recipient_group'] ?? 'active')));
+            $audiences = [
+                'active' => ["Status = 'Active'", 'active members'],
+                'pending' => ["Status = 'Pending'", 'pending members'],
+                'all' => ["Status IN ('Active', 'Pending')", 'active and pending members'],
+            ];
+            if (!isset($audiences[$recipientGroup])) {
+                throw new InvalidArgumentException('Please choose a valid broadcast audience.');
+            }
+            [$statusCondition, $audienceLabel] = $audiences[$recipientGroup];
+
             $phoneStmt = $pdo->query(
                 "SELECT PrimaryNumber FROM members
-                 WHERE Status = 'Active'
+                 WHERE {$statusCondition}
                    AND PrimaryNumber IS NOT NULL
-                   AND PrimaryNumber <> ''"
+                   AND TRIM(PrimaryNumber) <> ''"
             );
             $phones = array_column($phoneStmt->fetchAll(PDO::FETCH_ASSOC), 'PrimaryNumber');
 
             if (empty($phones)) {
-                throw new RuntimeException('No active members with a phone number found.');
+                throw new RuntimeException('No ' . $audienceLabel . ' with a phone number found.');
             }
 
             $result = SmsService::sendBulkSms($phones, $messageBody);
@@ -75,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $queued = $result['data']['queued'] ?? count($phones);
-            $_SESSION['msg_flash']      = "Bulk SMS queued successfully for {$queued} recipient(s).";
+            $_SESSION['msg_flash']      = "Broadcast queued successfully for {$queued} {$audienceLabel}.";
             $_SESSION['msg_flash_type'] = 'success';
 
         /* -----------------------------------------------
@@ -92,46 +122,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Please select at least one member.');
             }
 
-            // If "all" was chosen
-            if (in_array('all', $memberIds, true)) {
-                $phoneStmt = $pdo->query(
-                    "SELECT PrimaryNumber FROM members
-                     WHERE Status = 'Active'
-                       AND PrimaryNumber IS NOT NULL
-                       AND PrimaryNumber <> ''"
-                );
-                $phones = array_column($phoneStmt->fetchAll(PDO::FETCH_ASSOC), 'PrimaryNumber');
-
-                if (empty($phones)) {
-                    throw new RuntimeException('No active members with a phone number found.');
-                }
-
-                $result = SmsService::sendBulkSms($phones, $messageBody);
-                if (!$result['success']) {
-                    throw new RuntimeException('Bulk send failed: ' . ($result['error'] ?? 'Unknown error'));
-                }
-
-                $queued = $result['data']['queued'] ?? count($phones);
-                $_SESSION['msg_flash']      = "Bulk SMS queued successfully for {$queued} recipient(s).";
-                $_SESSION['msg_flash_type'] = 'success';
-
-                header('Location: messages.php?tab=single');
-                exit;
-            }
-
             // Fetch selected members
             $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
             $mStmt = $pdo->prepare(
                 "SELECT MemberID, FirstName, LastName, PrimaryNumber
                  FROM members
                  WHERE MemberID IN ($placeholders)
-                   AND Status = 'Active'"
+                   AND Status IN ('Active', 'Pending')"
             );
             $mStmt->execute($memberIds);
             $selectedMembers = $mStmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($selectedMembers)) {
-                throw new RuntimeException('None of the selected members were found or active.');
+                throw new RuntimeException('None of the selected members were found or eligible (Active or Pending).');
             }
 
             $validMembers = array_values(array_filter($selectedMembers, function ($m) {
@@ -203,7 +206,6 @@ function he($v): string
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
-$totalActive = count($members);
 $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
 ?>
 <!DOCTYPE html>
@@ -380,19 +382,25 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
 
     <!-- Metrics row -->
     <div class="row g-3 mb-4">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="msg-metric">
           <div class="msg-metric-val"><?= he($totalActive) ?></div>
           <div class="msg-metric-label">Active Members</div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
+        <div class="msg-metric">
+          <div class="msg-metric-val"><?= he($totalPending) ?></div>
+          <div class="msg-metric-label">Pending Members</div>
+        </div>
+      </div>
+      <div class="col-md-3">
         <div class="msg-metric green">
           <div class="msg-metric-val">OramMobile</div>
           <div class="msg-metric-label">SMS Provider</div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="msg-metric">
           <div class="msg-metric-val">160</div>
           <div class="msg-metric-label">Chars per SMS Part</div>
@@ -409,14 +417,14 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
           <button class="msg-tab-btn <?= $initialTab === 'bulk' ? 'active' : '' ?>" id="tab-bulk-btn"
                   role="tab" aria-selected="<?= $initialTab === 'bulk' ? 'true' : 'false' ?>" aria-controls="panel-bulk"
                   onclick="switchTab('bulk')">
-            Broadcast to all Members
-            <span class="tab-sub">One message to every active member (<?= he($totalActive) ?>)</span>
+            Broadcast to Active Members
+            <span class="tab-sub">Choose active, pending, or all members</span>
           </button>
           <button class="msg-tab-btn <?= $initialTab === 'single' ? 'active' : '' ?>" id="tab-single-btn"
                   role="tab" aria-selected="<?= $initialTab === 'single' ? 'true' : 'false' ?>" aria-controls="panel-single"
                   onclick="switchTab('single')">
             Select Member(s)
-            <span class="tab-sub">Choose 1 member or more</span>
+            <span class="tab-sub">Choose Active or Pending members</span>
           </button>
         </div>
 
@@ -428,11 +436,15 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
 
             <div class="row g-3">
               <div class="col-12">
-                <label class="form-label fw-bold">Recipients</label>
-                <div>
-                  <span class="recipient-badge">
-                    All <?= he($totalActive) ?> active member(s)
-                  </span>
+                <label class="form-label fw-bold" for="broadcastAudience">Broadcast audience</label>
+                <select class="form-select" name="recipient_group" id="broadcastAudience" onchange="updateBroadcastAudience()">
+                  <option value="active" data-count="<?= (int)$activeRecipients ?>" data-label="active members" selected>Broadcast to active members (<?= (int)$activeRecipients ?>)</option>
+                  <option value="pending" data-count="<?= (int)$pendingRecipients ?>" data-label="pending members">Broadcast to pending members (<?= (int)$pendingRecipients ?>)</option>
+                  <option value="all" data-count="<?= (int)$totalEligibleRecipients ?>" data-label="all members (Active and Pending)">Broadcast to all members — Active and Pending (<?= (int)$totalEligibleRecipients ?>)</option>
+                </select>
+                <div class="mt-2">
+                  <span class="recipient-badge" id="broadcastRecipientSummary">Broadcast to active members (<?= (int)$activeRecipients ?>)</span>
+                  <span class="text-danger small ms-2" id="broadcast-empty-message" <?= $activeRecipients > 0 ? 'hidden' : '' ?>>No active members with phone numbers.</span>
                 </div>
               </div>
 
@@ -457,13 +469,10 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
               </div>
 
               <div class="col-12">
-                <button class="btn-send" type="submit"
-                        <?= $totalActive === 0 ? 'disabled' : '' ?>>
-                  Send to All <?= he($totalActive) ?> Member(s)
+                <button class="btn-send" type="submit" id="broadcast-send-btn"
+                        <?= $activeRecipients === 0 ? 'disabled' : '' ?>>
+                  Send to active members (<?= (int)$activeRecipients ?>)
                 </button>
-                <?php if ($totalActive === 0): ?>
-                  <span class="text-danger small ms-3">No active members with phone numbers.</span>
-                <?php endif; ?>
               </div>
             </div>
           </form>
@@ -513,6 +522,7 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
                           data-name="<?= he($name) ?>"
                           data-phone="<?= he($phone) ?>"
                           data-id="<?= he($m['MemberID']) ?>"
+                          data-status="<?= he($m['Status']) ?>"
                         >
                           <input
                             type="checkbox"
@@ -523,6 +533,7 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
                             onchange="onCheckboxChange(this)"
                           >
                           <span class="flex-grow-1"><?= he($name) ?> (<?= he($natId) ?> &middot; <?= $hasPhone ? he($phone) : 'No phone' ?>)</span>
+                          <span class="badge <?= $m['Status'] === 'Pending' ? 'text-bg-warning' : 'text-bg-success' ?> ms-2"><?= he($m['Status']) ?></span>
                         </label>
                       <?php endforeach; ?>
                     </div>
@@ -738,10 +749,34 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
       return confirm('Are you sure you want to send this message to ' + count + ' member(s)?');
     }
 
-    function confirmBulk() {
-      var total = <?= (int)$totalActive ?>;
-      return confirm('You are about to send an SMS to ALL ' + total + ' active member(s).\n\nContinue?');
+    function updateBroadcastAudience() {
+      var select = document.getElementById('broadcastAudience');
+      var selectedOption = select.options[select.selectedIndex];
+      var count = parseInt(selectedOption.getAttribute('data-count'), 10) || 0;
+      var audience = selectedOption.getAttribute('data-label') || 'members';
+      var summary = document.getElementById('broadcastRecipientSummary');
+      var sendButton = document.getElementById('broadcast-send-btn');
+      var emptyMessage = document.getElementById('broadcast-empty-message');
+
+      summary.textContent = 'Broadcast to ' + audience + ' (' + count + ')';
+      sendButton.textContent = 'Send to ' + audience + ' (' + count + ')';
+      sendButton.disabled = count === 0;
+      emptyMessage.hidden = count > 0;
+      if (count === 0) {
+        emptyMessage.textContent = 'No ' + audience + ' with phone numbers.';
+      }
     }
+
+    function confirmBulk() {
+      var select = document.getElementById('broadcastAudience');
+      var selectedOption = select.options[select.selectedIndex];
+      var count = parseInt(selectedOption.getAttribute('data-count'), 10) || 0;
+      var audience = selectedOption.getAttribute('data-label') || 'members';
+      if (count === 0) return false;
+      return confirm('You are about to send an SMS to ' + count + ' ' + audience + '.\n\nContinue?');
+    }
+
+    updateBroadcastAudience();
   </script>
 </body>
 </html>
