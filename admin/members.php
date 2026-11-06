@@ -24,6 +24,7 @@ try {
     $pdo->query('SELECT 1 FROM members LIMIT 1');
     $pdo->query('SELECT 1 FROM deposits LIMIT 1');
     $pdo->query('SELECT 1 FROM member_transactions LIMIT 1');
+    $pdo->query('SELECT 1 FROM SaccoWallets LIMIT 1');
 } catch (Throwable $error) {
     error_log('Admin dashboard setup error: ' . $error->getMessage());
     ?>
@@ -57,14 +58,14 @@ try {
 }
 
 
-[$members, $memberContributions, $totalMembers, $totalPages, $currentPage] = loadMembers($pdo, $search, $rowLimit, $currentPage);
+[$members, $memberTransactions, $totalMembers, $totalPages, $currentPage] = loadMembers($pdo, $search, $rowLimit, $currentPage);
 
 if (($_GET['download'] ?? '') === 'pdf') {
     $pdfMembers = loadMembersForPdf($pdo, $search);
     SimplePdfTable::download(
         'members-report.pdf',
         'Members Report',
-        ['MemberID', 'Name', 'Phone', 'Email', 'NationalID', 'Status', 'Deposit Bal.', 'Created', 'Contributions', 'Net Savings'],
+        ['MemberID', 'Name', 'Phone', 'Email', 'NationalID', 'Status', 'Deposit Bal.', 'Created', 'Akiba Amount', 'Ushirika Amount'],
         array_map(static function (array $member): array {
             return [
                 (string)$member['MemberID'],
@@ -75,11 +76,11 @@ if (($_GET['download'] ?? '') === 'pdf') {
                 (string)$member['Status'],
                 number_format((float)($member['Balance'] ?? 0), 2),
                 (string)$member['CreatedAt'],
-                number_format((float)$member['TotalContributions'], 2),
-                number_format((float)$member['NetSavings'], 2),
+                number_format((float)$member['AkibaAmount'], 2),
+                number_format((float)$member['UshirikaAmount'], 2),
             ];
         }, $pdfMembers),
-        [62, 110, 76, 116, 72, 56, 68, 84, 76]
+        [50, 90, 100, 100, 70, 55, 70, 85, 80, 80]
     );
 }
 
@@ -87,7 +88,7 @@ if (($_GET['ajax'] ?? '') === 'members') {
     header('Content-Type: application/json');
     echo json_encode([
         'rows' => renderMemberRows($members),
-        'modals' => renderMemberModals($members, $memberContributions),
+        'modals' => renderMemberModals($members, $memberTransactions),
         'count' => count($members),
         'total' => $totalMembers,
         'page' => $currentPage,
@@ -155,53 +156,45 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
 
     $stmt = $pdo->prepare(
         "SELECT m.*, d.RequiredAmount, d.PaidAmount, d.Balance, d.Status AS DepositStatus,
-            COALESCE(totals.TotalContributions, 0) AS TotalContributions,
-            COALESCE(totals.ContributionCount, 0) AS ContributionCount,
-            COALESCE(withd.TotalWithdrawals, 0) AS TotalWithdrawals,
-            (COALESCE(totals.TotalContributions, 0) - COALESCE(withd.TotalWithdrawals, 0)) AS NetSavings
+            COALESCE(wallets.AkibaAmount, 0) AS AkibaAmount,
+            COALESCE(wallets.UshirikaAmount, 0) AS UshirikaAmount
          FROM members m
          LEFT JOIN deposits d ON d.MemberID = m.MemberID
          LEFT JOIN (
-            SELECT MemberID, SUM(Amount) AS TotalContributions, COUNT(TransactionID) AS ContributionCount
-            FROM member_transactions
-            WHERE MemberID IS NOT NULL AND TransactionType = 'contribution'
+            SELECT MemberID, SUM(AkibaAmount) AS AkibaAmount, SUM(UshirikaAmount) AS UshirikaAmount
+            FROM SaccoWallets
+            WHERE MemberID IS NOT NULL
             GROUP BY MemberID
-         ) totals ON totals.MemberID = m.MemberID
-        LEFT JOIN (
-          SELECT MemberID, SUM(Amount) AS TotalWithdrawals
-          FROM withdrawals
-          WHERE MemberID IS NOT NULL
-          GROUP BY MemberID
-        ) withd ON withd.MemberID = m.MemberID
+         ) wallets ON wallets.MemberID = m.MemberID
          {$whereSql}
          ORDER BY m.FirstName ASC, m.LastName ASC, m.MemberID ASC
          LIMIT {$limit} OFFSET {$offset}"
     );
     $stmt->execute($params);
     $members = $stmt->fetchAll();
-    $memberContributions = [];
+    $memberTransactions = [];
 
     if ($members) {
         $memberIds = array_column($members, 'MemberID');
         $placeholders = implode(',', array_fill(0, count($memberIds), '?'));
-        $contributionStmt = $pdo->prepare(
+        $transactionsStmt = $pdo->prepare(
             "SELECT *
              FROM member_transactions
-             WHERE MemberID IN ({$placeholders}) AND TransactionType = 'contribution'
+             WHERE MemberID IN ({$placeholders})
              ORDER BY COALESCE(TranTime, CreatedAt) DESC"
         );
-        $contributionStmt->execute($memberIds);
+        $transactionsStmt->execute($memberIds);
 
-        foreach ($contributionStmt->fetchAll() as $contribution) {
-            $memberId = (string)$contribution['MemberID'];
-            if (!isset($memberContributions[$memberId])) {
-                $memberContributions[$memberId] = [];
+        foreach ($transactionsStmt->fetchAll() as $transaction) {
+            $memberId = (string)$transaction['MemberID'];
+            if (!isset($memberTransactions[$memberId])) {
+                $memberTransactions[$memberId] = [];
             }
-            $memberContributions[$memberId][] = $contribution;
+            $memberTransactions[$memberId][] = $transaction;
         }
     }
 
-    return [$members, $memberContributions, $totalMembers, $totalPages, $page];
+    return [$members, $memberTransactions, $totalMembers, $totalPages, $page];
 }
 
 function loadMembersForPdf(PDO $pdo, string $search): array
@@ -216,23 +209,16 @@ function loadMembersForPdf(PDO $pdo, string $search): array
 
     $stmt = $pdo->prepare(
         "SELECT m.*, d.Balance,
-            COALESCE(totals.TotalContributions, 0) AS TotalContributions,
-            COALESCE(withd.TotalWithdrawals, 0) AS TotalWithdrawals,
-            (COALESCE(totals.TotalContributions, 0) - COALESCE(withd.TotalWithdrawals, 0)) AS NetSavings
+            COALESCE(wallets.AkibaAmount, 0) AS AkibaAmount,
+            COALESCE(wallets.UshirikaAmount, 0) AS UshirikaAmount
          FROM members m
          LEFT JOIN deposits d ON d.MemberID = m.MemberID
          LEFT JOIN (
-            SELECT MemberID, SUM(Amount) AS TotalContributions
-            FROM member_transactions
-            WHERE MemberID IS NOT NULL AND TransactionType = 'contribution'
-            GROUP BY MemberID
-         ) totals ON totals.MemberID = m.MemberID
-         LEFT JOIN (
-            SELECT MemberID, SUM(Amount) AS TotalWithdrawals
-            FROM withdrawals
+            SELECT MemberID, SUM(AkibaAmount) AS AkibaAmount, SUM(UshirikaAmount) AS UshirikaAmount
+            FROM SaccoWallets
             WHERE MemberID IS NOT NULL
             GROUP BY MemberID
-         ) withd ON withd.MemberID = m.MemberID
+         ) wallets ON wallets.MemberID = m.MemberID
          {$whereSql}
          ORDER BY m.FirstName ASC, m.LastName ASC, m.MemberID ASC"
     );
@@ -254,11 +240,11 @@ function renderMemberRows(array $members): string
         <td><span class="badge text-bg-<?= $member['Status'] === 'Active' ? 'success' : ($member['Status'] === 'Suspended' ? 'danger' : 'secondary') ?>"><?= e($member['Status']) ?></span></td>
         <td><?= number_format((float)($member['Balance'] ?? 0), 2) ?></td>
         <td><?= e($member['CreatedAt']) ?></td>
-        <td class="text-end"><?= number_format((float)$member['TotalContributions'], 2) ?></td>
-        <td class="text-end fw-semibold"><?= number_format(max(0, (float)$member['NetSavings']), 2) ?></td>
+        <td class="text-end fw-semibold wallet-akiba"><?= number_format((float)$member['AkibaAmount'], 2) ?></td>
+        <td class="text-end fw-semibold wallet-ushirika"><?= number_format((float)$member['UshirikaAmount'], 2) ?></td>
         <td class="actions-cell text-end">
           <a href="edit_member.php?id=<?= urlencode($member['MemberID']) ?>">Edit</a>
-          <a href="#" data-bs-toggle="modal" data-bs-target="#memberContributions<?= e($member['MemberID']) ?>">Contributions</a>
+          <a href="#" data-bs-toggle="modal" data-bs-target="#memberTransactions<?= e($member['MemberID']) ?>">Transactions</a>
         </td>
       </tr>
     <?php endforeach;
@@ -270,16 +256,16 @@ function renderMemberRows(array $members): string
     return trim((string)ob_get_clean());
 }
 
-function renderMemberModals(array $members, array $memberContributions): string
+function renderMemberModals(array $members, array $memberTransactions): string
 {
     ob_start();
     foreach ($members as $member): ?>
-      <div class="modal fade" id="memberContributions<?= e($member['MemberID']) ?>" tabindex="-1" aria-hidden="true">
+      <div class="modal fade" id="memberTransactions<?= e($member['MemberID']) ?>" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header">
               <div>
-                <h3 class="modal-title h5">Contributions for <?= e($member['MemberID']) ?></h3>
+                <h3 class="modal-title h5">Transactions for <?= e($member['MemberID']) ?></h3>
                 <div class="small text-muted"><?= e($member['FirstName'] . ' ' . $member['LastName']) ?></div>
               </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -287,28 +273,31 @@ function renderMemberModals(array $members, array $memberContributions): string
             <div class="modal-body">
               <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
                 <div>
-                  <div class="text-muted small">Total Contributions</div>
-                  <div class="h4 fw-bold"><?= number_format((float)$member['TotalContributions'], 2) ?></div>
-                </div>
-                <div>
-                  <div class="text-muted small">Contribution Records</div>
-                  <div class="h4 fw-bold"><?= (int)$member['ContributionCount'] ?></div>
+                  <div class="text-muted small">Transaction Records</div>
+                  <div class="h4 fw-bold"><?= count($memberTransactions[$member['MemberID']] ?? []) ?></div>
                 </div>
               </div>
               <div class="table-responsive">
                 <table class="table align-middle">
-                  <thead><tr><th>TranID</th><th>Date</th><th>Phone</th><th class="text-end">Amount</th></tr></thead>
+                  <thead><tr><th>Reference</th><th>Date &amp; Time</th><th>Type</th><th>Description</th><th>Phone</th><th class="text-end">Amount</th></tr></thead>
                   <tbody>
-                    <?php foreach (($memberContributions[$member['MemberID']] ?? []) as $contribution): ?>
+                    <?php foreach (($memberTransactions[$member['MemberID']] ?? []) as $transaction): ?>
+                      <?php
+                        $category = trim((string)($transaction['TransactionCategory'] ?? ''));
+                        $transactionType = $category !== '' ? $category : (string)($transaction['TransactionType'] ?? 'transaction');
+                        $transactionType = ucwords(str_replace(['_', '-'], ' ', $transactionType));
+                      ?>
                       <tr>
-                        <td><?= e($contribution['TranID']) ?></td>
-                        <td><?= e($contribution['TranTime'] ?: $contribution['CreatedAt']) ?></td>
-                        <td><?= e($contribution['MSISDN']) ?></td>
-                        <td class="text-end"><?= number_format((float)$contribution['Amount'], 2) ?></td>
+                        <td><?= e(($transaction['Reference'] ?? '') ?: ($transaction['TranID'] ?? '')) ?></td>
+                        <td><?= e(($transaction['TranTime'] ?? '') ?: ($transaction['CreatedAt'] ?? '')) ?></td>
+                        <td><?= e($transactionType) ?></td>
+                        <td><?= e(($transaction['Description'] ?? '') ?: '—') ?></td>
+                        <td><?= e($transaction['MSISDN'] ?? '') ?></td>
+                        <td class="text-end"><?= number_format((float)$transaction['Amount'], 2) ?></td>
                       </tr>
                     <?php endforeach; ?>
-                    <?php if (empty($memberContributions[$member['MemberID']])): ?>
-                      <tr><td colspan="4" class="text-muted">No contributions found for this member.</td></tr>
+                    <?php if (empty($memberTransactions[$member['MemberID']])): ?>
+                      <tr><td colspan="6" class="text-muted">No transactions found for this member.</td></tr>
                     <?php endif; ?>
                   </tbody>
                 </table>
@@ -381,7 +370,7 @@ function renderPagination(int $currentPage, int $totalPages): string
   </style>
 </head>
 <body>
-  <?php admin_header('members', 'Member management and contributions'); ?>
+  <?php admin_header('members', 'Member Management'); ?>
 
   <main class="container-fluid admin-shell py-4">
     <?php if ($message): ?>
@@ -440,7 +429,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         </div>
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end">Total Contributions</th><th class="text-end">Net Savings</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end wallet-akiba">Akiba Amount</th><th class="text-end wallet-ushirika">Ushirika Amount</th><th class="text-end">Actions</th></tr></thead>
             <tbody id="membersTableBody">
               <?= renderMemberRows($members) ?>
             </tbody>
@@ -475,8 +464,8 @@ function renderPagination(int $currentPage, int $totalPages): string
     </section>
   </main>
 
-  <div id="memberContributionModals">
-    <?= renderMemberModals($members, $memberContributions) ?>
+  <div id="memberTransactionModals">
+    <?= renderMemberModals($members, $memberTransactions) ?>
   </div>
 
   <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -485,7 +474,7 @@ function renderPagination(int $currentPage, int $totalPages): string
     const memberSearch = document.getElementById('memberSearch');
     const rowLimit = document.getElementById('rowLimit');
     const membersTableBody = document.getElementById('membersTableBody');
-    const memberContributionModals = document.getElementById('memberContributionModals');
+    const memberTransactionModals = document.getElementById('memberTransactionModals');
     const memberResultSummary = document.getElementById('memberResultSummary');
     const memberPagination = document.getElementById('memberPagination');
     let activeController = null;
@@ -516,7 +505,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         })
         .then(function (data) {
           membersTableBody.innerHTML = data.rows;
-          memberContributionModals.innerHTML = data.modals;
+          memberTransactionModals.innerHTML = data.modals;
           memberResultSummary.textContent = data.summary;
           memberPagination.innerHTML = data.pagination;
           currentPage = data.page;
