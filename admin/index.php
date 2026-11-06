@@ -196,7 +196,41 @@ $activeMembers = (int)($memberStats['ActiveMembers'] ?? 0);
 $pendingMembers = (int)($memberStats['PendingMembers'] ?? 0);
 $totalContributing = (float)($transactionStats['TotalContributing'] ?? 0);
 $totalWithdrawals = (float)($transactionStats['TotalWithdrawals'] ?? 0);
-$netSavings = max(0.0, $totalContributing - $totalWithdrawals);
+
+// Fetch SaccoWallets and withdrawals totals
+$walletStats = [];
+try {
+    $walletStats = $pdo->query(
+        "SELECT
+            COALESCE(SUM(Amount), 0) AS TotalContributions,
+            COALESCE(SUM(AkibaAmount), 0) AS TotalAkiba,
+            COALESCE(SUM(UshirikaAmount), 0) AS TotalUshirika
+         FROM SaccoWallets"
+    )->fetch() ?: [];
+} catch (Throwable $e) {}
+
+$withdrawalTableStats = [];
+try {
+    $withdrawalTableStats = $pdo->query(
+        "SELECT COALESCE(SUM(Amount), 0) AS TotalWithdrawals FROM withdrawals"
+    )->fetch() ?: [];
+} catch (Throwable $e) {}
+
+$totalAkiba = (float)($walletStats['TotalAkiba'] ?? 0);
+$totalUshirika = (float)($walletStats['TotalUshirika'] ?? 0);
+$totalWithdrawalsFromTable = (float)($withdrawalTableStats['TotalWithdrawals'] ?? 0);
+
+if ($totalAkiba > 0 || $totalUshirika > 0) {
+    $netSavings = max(0.0, $totalAkiba - $totalWithdrawalsFromTable);
+    if ($totalWithdrawalsFromTable > 0) {
+        $totalWithdrawals = $totalWithdrawalsFromTable;
+    }
+} else {
+    $totalAkiba = round($totalContributing * 0.95, 2);
+    $totalUshirika = round($totalContributing * 0.05, 2);
+    $netSavings = max(0.0, $totalContributing - $totalWithdrawals);
+}
+
 $withdrawalRate = $totalContributing > 0 ? min(100, ($totalWithdrawals / $totalContributing) * 100) : 0;
 $entranceFeesReserve = (float)($depositStats['EntranceFeesReserve'] ?? 0);
 $shareCapital = $entranceFeesReserve;
@@ -394,9 +428,14 @@ $months = hydrateMonthly(
         <div class="bi-metric-note"><?= e(moneyShort($thisMonthSavings)) ?> saved this month</div>
       </div>
       <div class="bi-metric blue">
-        <div class="bi-metric-label">Net Savings</div>
+        <div class="bi-metric-label">Akiba Wallet (Net Savings)</div>
         <div class="bi-metric-value"><?= e(moneyShort($netSavings)) ?></div>
-        <div class="bi-metric-note">Contributing less withdrawals</div>
+        <div class="bi-metric-note">Akiba funds less withdrawals</div>
+      </div>
+      <div class="bi-metric purple">
+        <div class="bi-metric-label">Ushirika Shares</div>
+        <div class="bi-metric-value"><?= e(moneyShort($totalUshirika)) ?></div>
+        <div class="bi-metric-note">5% allocated member shares</div>
       </div>
       <div class="bi-metric purple">
         <div class="bi-metric-label">Entrance Fees Reserve</div>

@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS `member_transactions` (
   `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`TransactionID`),
   UNIQUE KEY `uniq_member_transactions_tran_segment` (`TranID`, `TransactionType`, `TransactionCategory`),
+  KEY `idx_member_transactions_tran_id` (`TranID`),
   KEY `idx_member_transactions_member` (`MemberID`),
   KEY `idx_member_transactions_national_id` (`NationalID`),
   KEY `idx_member_transactions_type` (`TransactionType`),
@@ -98,14 +99,48 @@ CREATE TABLE IF NOT EXISTS `withdrawals` (
   `WithdrawalDate` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `Description` VARCHAR(255) NULL,
   `AdminUserID` INT UNSIGNED NULL,
+  `TranID` VARCHAR(60) NULL,
+  `Reference` VARCHAR(120) NULL,
   `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`WithdrawalID`),
   KEY `idx_withdrawals_member` (`MemberID`),
   KEY `idx_withdrawals_date` (`WithdrawalDate`),
+  KEY `idx_withdrawals_tran_id` (`TranID`),
+  KEY `idx_withdrawals_reference` (`Reference`),
   CONSTRAINT `fk_withdrawals_member`
     FOREIGN KEY (`MemberID`) REFERENCES `members` (`MemberID`)
     ON UPDATE CASCADE
-    ON DELETE CASCADE
+    ON DELETE CASCADE,
+  CONSTRAINT `fk_withdrawals_transaction`
+    FOREIGN KEY (`TranID`) REFERENCES `member_transactions` (`TranID`)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `SaccoWallets` (
+  `WalletRecordID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `TransactionID` BIGINT UNSIGNED NOT NULL,
+  `TranID` VARCHAR(60) NOT NULL,
+  `MemberID` VARCHAR(40) NULL,
+  `NationalID` VARCHAR(30) NOT NULL,
+  `Amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `AkibaAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `UshirikaAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `UpdatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`WalletRecordID`),
+  UNIQUE KEY `uniq_sacco_wallets_transaction` (`TransactionID`),
+  KEY `idx_sacco_wallets_tran_id` (`TranID`),
+  KEY `idx_sacco_wallets_member` (`MemberID`),
+  KEY `idx_sacco_wallets_national_id` (`NationalID`),
+  CONSTRAINT `fk_sacco_wallets_transaction`
+    FOREIGN KEY (`TransactionID`) REFERENCES `member_transactions` (`TransactionID`)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE,
+  CONSTRAINT `fk_sacco_wallets_member`
+    FOREIGN KEY (`MemberID`) REFERENCES `members` (`MemberID`)
+    ON UPDATE CASCADE
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -134,6 +169,37 @@ SELECT
   d.Status AS DepositStatus
 FROM members m
 LEFT JOIN deposits d ON d.MemberID = m.MemberID;
+
+CREATE OR REPLACE VIEW `member_wallet_balances` AS
+SELECT
+  m.MemberID,
+  m.NationalID,
+  m.FirstName,
+  m.LastName,
+  COALESCE(w.TotalContributions, 0.00) AS TotalContributions,
+  COALESCE(w.TotalAkiba, 0.00) AS TotalAkiba,
+  COALESCE(w.TotalUshirika, 0.00) AS TotalUshirikaShares,
+  COALESCE(wd.TotalWithdrawals, 0.00) AS TotalWithdrawals,
+  GREATEST(0.00, COALESCE(w.TotalAkiba, 0.00) - COALESCE(wd.TotalWithdrawals, 0.00)) AS AkibaWalletBalance
+FROM members m
+LEFT JOIN (
+  SELECT
+    MemberID,
+    SUM(Amount) AS TotalContributions,
+    SUM(AkibaAmount) AS TotalAkiba,
+    SUM(UshirikaAmount) AS TotalUshirika
+  FROM SaccoWallets
+  WHERE MemberID IS NOT NULL
+  GROUP BY MemberID
+) w ON w.MemberID = m.MemberID
+LEFT JOIN (
+  SELECT
+    MemberID,
+    SUM(Amount) AS TotalWithdrawals
+  FROM withdrawals
+  WHERE MemberID IS NOT NULL
+  GROUP BY MemberID
+) wd ON wd.MemberID = m.MemberID;
 
 CREATE TABLE IF NOT EXISTS `message_logs` (
   `LogID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

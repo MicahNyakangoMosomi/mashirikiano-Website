@@ -169,8 +169,8 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
          ) totals ON totals.MemberID = m.MemberID
         LEFT JOIN (
           SELECT MemberID, SUM(Amount) AS TotalWithdrawals
-          FROM member_transactions
-          WHERE MemberID IS NOT NULL AND TransactionType = 'withdrawal'
+          FROM withdrawals
+          WHERE MemberID IS NOT NULL
           GROUP BY MemberID
         ) withd ON withd.MemberID = m.MemberID
          {$whereSql}
@@ -229,8 +229,8 @@ function loadMembersForPdf(PDO $pdo, string $search): array
          ) totals ON totals.MemberID = m.MemberID
          LEFT JOIN (
             SELECT MemberID, SUM(Amount) AS TotalWithdrawals
-            FROM member_transactions
-            WHERE MemberID IS NOT NULL AND TransactionType = 'withdrawal'
+            FROM withdrawals
+            WHERE MemberID IS NOT NULL
             GROUP BY MemberID
          ) withd ON withd.MemberID = m.MemberID
          {$whereSql}

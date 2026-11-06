@@ -23,9 +23,18 @@ $adminRole = Auth::adminRole();
 $isAdmin = $adminRole === 'admin';
 $adminUserId = $_SESSION['admin_user_id'] ?? null;
 
-// Self-healing table creation for withdrawals
+// Self-healing table creation and schema updates for withdrawals
 try {
     $pdo->query("SELECT 1 FROM `withdrawals` LIMIT 1");
+    // Ensure TranID and Reference exist in withdrawals
+    $cols = $pdo->query("SHOW COLUMNS FROM `withdrawals` LIKE 'TranID'")->fetch();
+    if (!$cols) {
+        $pdo->exec("ALTER TABLE `withdrawals` ADD COLUMN `TranID` VARCHAR(60) NULL AFTER `AdminUserID`");
+    }
+    $refCols = $pdo->query("SHOW COLUMNS FROM `withdrawals` LIKE 'Reference'")->fetch();
+    if (!$refCols) {
+        $pdo->exec("ALTER TABLE `withdrawals` ADD COLUMN `Reference` VARCHAR(120) NULL AFTER `TranID`");
+    }
 } catch (Throwable $e) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS `withdrawals` (
       `WithdrawalID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -34,14 +43,37 @@ try {
       `WithdrawalDate` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       `Description` VARCHAR(255) NULL,
       `AdminUserID` INT UNSIGNED NULL,
+      `TranID` VARCHAR(60) NULL,
+      `Reference` VARCHAR(120) NULL,
       `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (`WithdrawalID`),
       KEY `idx_withdrawals_member` (`MemberID`),
       KEY `idx_withdrawals_date` (`WithdrawalDate`),
-      CONSTRAINT `fk_withdrawals_member`
-        FOREIGN KEY (`MemberID`) REFERENCES `members` (`MemberID`)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
+      KEY `idx_withdrawals_tran_id` (`TranID`),
+      KEY `idx_withdrawals_reference` (`Reference`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+}
+
+// Self-healing check for SaccoWallets
+try {
+    $pdo->query("SELECT 1 FROM `SaccoWallets` LIMIT 1");
+} catch (Throwable $e) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `SaccoWallets` (
+      `WalletRecordID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      `TransactionID` BIGINT UNSIGNED NOT NULL,
+      `TranID` VARCHAR(60) NOT NULL,
+      `MemberID` VARCHAR(40) NULL,
+      `NationalID` VARCHAR(30) NOT NULL,
+      `Amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      `AkibaAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      `UshirikaAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      `UpdatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (`WalletRecordID`),
+      UNIQUE KEY `uniq_sacco_wallets_transaction` (`TransactionID`),
+      KEY `idx_sacco_wallets_tran_id` (`TranID`),
+      KEY `idx_sacco_wallets_member` (`MemberID`),
+      KEY `idx_sacco_wallets_national_id` (`NationalID`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 }
 
@@ -83,33 +115,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
             throw new Exception("Only active members are eligible to make withdrawals.");
         }
 
-        // Calculate Current Member Savings (Contributions minus Withdrawals)
-        $contribStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE MemberID = :mid AND TransactionType = 'contribution'");
-        $contribStmt->execute([':mid' => $memberId]);
-        $totalContributions = (float)$contribStmt->fetchColumn();
+        // Calculate Current Member Akiba Wallet Savings (Akiba funds from SaccoWallets minus Withdrawals)
+        $akibaStmt = $pdo->prepare("SELECT COALESCE(SUM(AkibaAmount), 0) FROM SaccoWallets WHERE MemberID = :mid");
+        $akibaStmt->execute([':mid' => $memberId]);
+        $totalAkiba = (float)$akibaStmt->fetchColumn();
 
-        $withdStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE MemberID = :mid AND TransactionType = 'withdrawal'");
+        // Fallback: If SaccoWallets hasn't been backfilled yet for this member, calculate 95% of member_transactions contributions
+        if ($totalAkiba <= 0) {
+            $contribStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE MemberID = :mid AND TransactionType = 'contribution'");
+            $contribStmt->execute([':mid' => $memberId]);
+            $rawContrib = (float)$contribStmt->fetchColumn();
+            if ($rawContrib > 0) {
+                $totalAkiba = round($rawContrib * 0.95, 2);
+            }
+        }
+
+        // Total withdrawals directly from withdrawals table
+        $withdStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM withdrawals WHERE MemberID = :mid");
         $withdStmt->execute([':mid' => $memberId]);
         $totalWithdrawals = (float)$withdStmt->fetchColumn();
 
-        $netSavings = max(0.00, $totalContributions - $totalWithdrawals);
+        $akibaWallet = max(0.00, $totalAkiba - $totalWithdrawals);
 
-        if ($amount > $netSavings) {
-            throw new Exception("Requested withdrawal of " . number_format($amount, 2) . " exceeds member's available net savings of " . number_format($netSavings, 2) . ".");
+        if ($amount > $akibaWallet) {
+            throw new Exception("Requested withdrawal of KES " . number_format($amount, 2) . " exceeds member's available Akiba wallet balance of KES " . number_format($akibaWallet, 2) . ".");
         }
 
-        // 1. Insert into withdrawals table
-        $wStmt = $pdo->prepare("INSERT INTO withdrawals (MemberID, Amount, WithdrawalDate, Description, AdminUserID) VALUES (:member_id, :amount, :w_date, :description, :admin_id)");
-        $wStmt->execute([
-            ':member_id' => $memberId,
-            ':amount' => $amount,
-            ':w_date' => $formattedDate,
-            ':description' => $descText,
-            ':admin_id' => $adminUserId
-        ]);
-        $withdrawalId = $pdo->lastInsertId();
-
-        // 2. Insert into member_transactions ledger
+        // 1. Insert into member_transactions ledger FIRST so TranID exists for FK in withdrawals
         $ledgerStmt = $pdo->prepare("INSERT INTO member_transactions
             (TranID, MemberID, NationalID, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
             VALUES
@@ -122,14 +154,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
             ':last_name' => $member['LastName'],
             ':msisdn' => $member['PrimaryNumber'],
             ':amount' => $amount,
-            ':reference' => 'WD-' . $withdrawalId,
+            ':reference' => $tranId, // temporary reference, updated to WD-<id> below
             ':description' => $descText,
             ':tran_time' => $formattedDate
         ]);
 
+        // 2. Insert into withdrawals table referencing TranID
+        $wStmt = $pdo->prepare("INSERT INTO withdrawals (MemberID, Amount, WithdrawalDate, Description, AdminUserID, TranID, Reference) VALUES (:member_id, :amount, :w_date, :description, :admin_id, :tran_id, :reference)");
+        $wStmt->execute([
+            ':member_id' => $memberId,
+            ':amount' => $amount,
+            ':w_date' => $formattedDate,
+            ':description' => $descText,
+            ':admin_id' => $adminUserId,
+            ':tran_id' => $tranId,
+            ':reference' => null
+        ]);
+        $withdrawalId = (int)$pdo->lastInsertId();
+        $reference = 'WD-' . $withdrawalId;
+
+        // 3. Link both tables with the same Reference identifier (WD-<WithdrawalID>)
+        $pdo->prepare("UPDATE withdrawals SET Reference = :ref WHERE WithdrawalID = :wid")
+            ->execute([':ref' => $reference, ':wid' => $withdrawalId]);
+        $pdo->prepare("UPDATE member_transactions SET Reference = :ref WHERE TranID = :tran_id AND TransactionType = 'withdrawal'")
+            ->execute([':ref' => $reference, ':tran_id' => $tranId]);
+
         $pdo->commit();
 
-        $newBalance = max(0.00, $netSavings - $amount);
+        $newBalance = max(0.00, $akibaWallet - $amount);
 
         // 3. Send SMS notification to member with withdrawal details, date, updated savings, and random marketing message
         $adPromos = [
@@ -145,10 +197,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
 
         $fullName = trim($member['FirstName'] . ' ' . $member['LastName']);
         $displayDate = date('d-M-Y', strtotime($formattedDate));
-        $smsMsg = "Dear {$fullName}, a withdrawal of " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Your new current savings balance is " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
+        $smsMsg = "Dear {$fullName}, a withdrawal of KES " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Your new Akiba wallet balance is KES " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
         SmsService::sendSms($member['PrimaryNumber'], $smsMsg);
 
-        $_SESSION['flash_message'] = "Withdrawal of " . number_format($amount, 2) . " for " . e($fullName) . " ({$memberId}) processed successfully!";
+        $_SESSION['flash_message'] = "Withdrawal of KES " . number_format($amount, 2) . " for " . e($fullName) . " ({$memberId}) processed successfully!";
         $_SESSION['flash_message_type'] = "success";
 
         header("Location: withdrawals.php");
@@ -188,10 +240,21 @@ $offset = ($page - 1) * $limit;
 
 $membersStmt = $pdo->prepare("
     SELECT m.*,
-        COALESCE(c.TotalContributions, 0) AS TotalContributions,
+        COALESCE(sw.TotalContributions, c.TotalContributions, 0) AS TotalContributions,
+        COALESCE(sw.TotalAkiba, c.TotalContributions * 0.95, 0) AS TotalAkiba,
+        COALESCE(sw.TotalUshirika, c.TotalContributions * 0.05, 0) AS TotalUshirika,
         COALESCE(w.TotalWithdrawals, 0) AS TotalWithdrawals,
-        (COALESCE(c.TotalContributions, 0) - COALESCE(w.TotalWithdrawals, 0)) AS NetSavings
+        GREATEST(0.00, COALESCE(sw.TotalAkiba, c.TotalContributions * 0.95, 0) - COALESCE(w.TotalWithdrawals, 0)) AS AkibaWallet
     FROM members m
+    LEFT JOIN (
+        SELECT MemberID,
+               SUM(Amount) AS TotalContributions,
+               SUM(AkibaAmount) AS TotalAkiba,
+               SUM(UshirikaAmount) AS TotalUshirika
+        FROM SaccoWallets
+        WHERE MemberID IS NOT NULL
+        GROUP BY MemberID
+    ) sw ON sw.MemberID = m.MemberID
     LEFT JOIN (
         SELECT MemberID, SUM(Amount) AS TotalContributions
         FROM member_transactions
@@ -200,8 +263,8 @@ $membersStmt = $pdo->prepare("
     ) c ON c.MemberID = m.MemberID
     LEFT JOIN (
         SELECT MemberID, SUM(Amount) AS TotalWithdrawals
-        FROM member_transactions
-        WHERE TransactionType = 'withdrawal' AND MemberID IS NOT NULL
+        FROM withdrawals
+        WHERE MemberID IS NOT NULL
         GROUP BY MemberID
     ) w ON w.MemberID = m.MemberID
     {$whereClause}
@@ -215,14 +278,19 @@ $activeMembers = $membersStmt->fetchAll();
 $summaryStats = $pdo->query("
     SELECT
         (SELECT COUNT(*) FROM members WHERE Status = 'Active') AS ActiveCount,
-        (SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE TransactionType = 'contribution') AS TotalContributions,
-        (SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE TransactionType = 'withdrawal') AS TotalWithdrawals
+        (SELECT COALESCE(SUM(Amount), 0) FROM SaccoWallets) AS TotalWalletContributions,
+        (SELECT COALESCE(SUM(AkibaAmount), 0) FROM SaccoWallets) AS TotalAkiba,
+        (SELECT COALESCE(SUM(UshirikaAmount), 0) FROM SaccoWallets) AS TotalUshirika,
+        (SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE TransactionType = 'contribution') AS FallbackContributions,
+        (SELECT COALESCE(SUM(Amount), 0) FROM withdrawals) AS TotalWithdrawals
 ")->fetch();
 
 $activeCount = (int)($summaryStats['ActiveCount'] ?? 0);
-$allContributions = (float)($summaryStats['TotalContributions'] ?? 0);
+$allContributions = (float)($summaryStats['TotalWalletContributions'] ?: $summaryStats['FallbackContributions'] ?: 0);
+$allAkiba = (float)($summaryStats['TotalAkiba'] ?: ($allContributions * 0.95));
+$allUshirika = (float)($summaryStats['TotalUshirika'] ?: ($allContributions * 0.05));
 $allWithdrawals = (float)($summaryStats['TotalWithdrawals'] ?? 0);
-$totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
+$totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
 
 ?>
 <!DOCTYPE html>
@@ -268,7 +336,6 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               <div class="text-muted small text-uppercase fw-bold">Active Members</div>
               <div class="h3 fw-bold mb-0 text-primary"><?= number_format($activeCount) ?></div>
             </div>
-            
           </div>
         </div>
       </div>
@@ -276,10 +343,21 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
         <div class="card card-metric shadow-sm bg-white p-3">
           <div class="d-flex align-items-center justify-content-between">
             <div>
-              <div class="text-muted small text-uppercase fw-bold">Total Contributions</div>
-              <div class="h3 fw-bold mb-0 text-success"><?= number_format($allContributions, 2) ?></div>
+              <div class="text-muted small text-uppercase fw-bold">Akiba Wallet Pool</div>
+              <div class="h3 fw-bold mb-0 text-success"><?= number_format($totalAkibaWallet, 2) ?></div>
+              <div class="small text-muted" style="font-size:0.75rem;">95% savings less withdrawals</div>
             </div>
-            
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card card-metric shadow-sm bg-white p-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <div class="text-muted small text-uppercase fw-bold">Ushirika Shares (5%)</div>
+              <div class="h3 fw-bold mb-0" style="color:#7c3aed;"><?= number_format($allUshirika, 2) ?></div>
+              <div class="small text-muted" style="font-size:0.75rem;">Retained member shares</div>
+            </div>
           </div>
         </div>
       </div>
@@ -289,19 +367,8 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
             <div>
               <div class="text-muted small text-uppercase fw-bold">Total Withdrawals</div>
               <div class="h3 fw-bold mb-0 text-danger"><?= number_format($allWithdrawals, 2) ?></div>
+              <div class="small text-muted" style="font-size:0.75rem;">From withdrawals table</div>
             </div>
-            
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card card-metric shadow-sm bg-white p-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="text-muted small text-uppercase fw-bold">Net Savings Pool</div>
-              <div class="h3 fw-bold mb-0 text-info"><?= number_format($totalNetSavings, 2) ?></div>
-            </div>
-            
           </div>
         </div>
       </div>
@@ -311,7 +378,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
     <div class="card shadow-sm border-0 mb-5">
       <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
         <div>
-          <h2 class="h5 mb-0 fw-bold text-dark">Active SACCO Members </h2>
+          <h2 class="h5 mb-0 fw-bold text-dark">Active SACCO Members</h2>
         </div>
         <form class="d-flex gap-2" method="GET" action="withdrawals.php">
           <div class="input-group input-group-sm">
@@ -333,9 +400,9 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
                 <th>Full Name</th>
                 <th>National ID</th>
                 <th>Phone Number</th>
-                <th class="text-end">Total Contributions</th>
+                <th class="text-end">Akiba Wallet</th>
+                <th class="text-end">Ushirika Shares</th>
                 <th class="text-end">Total Withdrawn</th>
-                <th class="text-end">Current Net Savings</th>
                 <th class="text-center pe-3">Action</th>
               </tr>
             </thead>
@@ -354,18 +421,18 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
                     $mName = e(trim($m['FirstName'] . ' ' . $m['LastName']));
                     $mNatId = e($m['NationalID']);
                     $mPhone = e($m['PrimaryNumber']);
-                    $contrib = (float)$m['TotalContributions'];
+                    $akiba = (float)$m['AkibaWallet'];
+                    $ushirika = (float)$m['TotalUshirika'];
                     $withd = (float)$m['TotalWithdrawals'];
-                    $net = max(0.00, (float)$m['NetSavings']);
                   ?>
                   <tr>
                     <td class="ps-3 fw-semibold text-primary"><?= $mId ?></td>
                     <td class="fw-bold"><?= $mName ?></td>
                     <td><?= $mNatId ?></td>
                     <td><?= $mPhone ?></td>
-                    <td class="text-end text-success font-monospace"><?= number_format($contrib, 2) ?></td>
+                    <td class="text-end text-success font-monospace fw-bold"><?= number_format($akiba, 2) ?></td>
+                    <td class="text-end font-monospace" style="color:#7c3aed;"><?= number_format($ushirika, 2) ?></td>
                     <td class="text-end text-danger font-monospace"><?= number_format($withd, 2) ?></td>
-                    <td class="text-end fw-bold text-dark font-monospace bg-light"><?= number_format($net, 2) ?></td>
                     <td class="text-center pe-3">
                       <button type="button"
                               class="btn btn-sm btn-danger px-3 shadow-sm btn-withdraw-trigger"
@@ -375,7 +442,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
                               data-member-name="<?= $mName ?>"
                               data-national-id="<?= $mNatId ?>"
                               data-phone="<?= $mPhone ?>"
-                              data-savings="<?= number_format($net, 2, '.', '') ?>">
+                              data-savings="<?= number_format($akiba, 2, '.', '') ?>">
                         <i class="bi bi-arrow-up-right-circle me-1"></i> Withdraw
                       </button>
                     </td>
@@ -458,7 +525,7 @@ $totalNetSavings = max(0.00, $allContributions - $allWithdrawals);
               </div>
               <hr class="my-2">
               <div class="d-flex align-items-center justify-content-between">
-                <span class="fw-semibold text-dark">Available Savings:</span>
+                <span class="fw-semibold text-dark">Available Akiba Wallet:</span>
                 <span class="fs-5 fw-bold text-success font-monospace" id="modalSavingsDisplay">0.00</span>
               </div>
             </div>

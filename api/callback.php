@@ -90,52 +90,71 @@ try {
 
         
         // -------------------------------------------------------
-        // Net savings: query the actual ledger (member_transactions)
-        // Net Savings = Total Contributions − Total Withdrawals
-        // One query covers all three types in a single round-trip.
-        // Use MemberID (already resolved) when available, fall back
-        // to NationalID for unlinked / unregistered members.
+        // Wallet balances: query SaccoWallets (Akiba & Ushirika)
+        // and withdrawals table for cash releases.
         // -------------------------------------------------------
         $memberId = $result['member_id'] ?? null;
-
-        if ($memberId !== null) {
-            // Preferred: look up by MemberID — exact, no ambiguity
-            $savingsStmt = $pdo->prepare(
-                "SELECT
-                    TransactionType,
-                    SUM(Amount) AS total
-                 FROM member_transactions
-                 WHERE MemberID = :member_id
-                   AND TransactionType IN ('contribution', 'withdrawal')
-                 GROUP BY TransactionType"
-            );
-            $savingsStmt->execute([':member_id' => $memberId]);
-        } else {
-            // Fallback: unregistered sender — use NationalID
-            $savingsStmt = $pdo->prepare(
-                "SELECT
-                    TransactionType,
-                    SUM(Amount) AS total
-                 FROM member_transactions
-                 WHERE NationalID = :national_id
-                   AND TransactionType IN ('contribution', 'withdrawal')
-                 GROUP BY TransactionType"
-            );
-            $savingsStmt->execute([':national_id' => $nationalId]);
-        }
-
         $totalContribution = 0.00;
-        $totalWithdrawals  = 0.00;
-        foreach ($savingsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if ($row['TransactionType'] === 'contribution') {
-                $totalContribution = (float)$row['total'];
-            } elseif ($row['TransactionType'] === 'withdrawal') {
-                $totalWithdrawals = (float)$row['total'];
+        $totalAkiba = 0.00;
+        $totalUshirika = 0.00;
+        $totalWithdrawals = 0.00;
+
+        try {
+            if ($memberId !== null) {
+                $walletStmt = $pdo->prepare(
+                    "SELECT
+                        COALESCE(SUM(Amount), 0) AS total_contrib,
+                        COALESCE(SUM(AkibaAmount), 0) AS total_akiba,
+                        COALESCE(SUM(UshirikaAmount), 0) AS total_ushirika
+                     FROM SaccoWallets
+                     WHERE MemberID = :member_id"
+                );
+                $walletStmt->execute([':member_id' => $memberId]);
+                $wTotals = $walletStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+                $wWithdStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM withdrawals WHERE MemberID = :member_id");
+                $wWithdStmt->execute([':member_id' => $memberId]);
+                $totalWithdrawals = (float)$wWithdStmt->fetchColumn();
+            } else {
+                $walletStmt = $pdo->prepare(
+                    "SELECT
+                        COALESCE(SUM(Amount), 0) AS total_contrib,
+                        COALESCE(SUM(AkibaAmount), 0) AS total_akiba,
+                        COALESCE(SUM(UshirikaAmount), 0) AS total_ushirika
+                     FROM SaccoWallets
+                     WHERE NationalID = :national_id"
+                );
+                $walletStmt->execute([':national_id' => $nationalId]);
+                $wTotals = $walletStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            }
+            $totalContribution = (float)($wTotals['total_contrib'] ?? 0);
+            $totalAkiba = (float)($wTotals['total_akiba'] ?? 0);
+            $totalUshirika = (float)($wTotals['total_ushirika'] ?? 0);
+        } catch (Throwable $e) {}
+
+        // Fallback if SaccoWallets was empty
+        if ($totalContribution <= 0) {
+            if ($memberId !== null) {
+                $savingsStmt = $pdo->prepare("SELECT TransactionType, SUM(Amount) AS total FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal') GROUP BY TransactionType");
+                $savingsStmt->execute([':member_id' => $memberId]);
+            } else {
+                $savingsStmt = $pdo->prepare("SELECT TransactionType, SUM(Amount) AS total FROM member_transactions WHERE NationalID = :national_id AND TransactionType IN ('contribution', 'withdrawal') GROUP BY TransactionType");
+                $savingsStmt->execute([':national_id' => $nationalId]);
+            }
+            foreach ($savingsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                if ($row['TransactionType'] === 'contribution') {
+                    $totalContribution = (float)$row['total'];
+                    $totalAkiba = round($totalContribution * 0.95, 2);
+                    $totalUshirika = round($totalContribution * 0.05, 2);
+                } elseif ($row['TransactionType'] === 'withdrawal' && $totalWithdrawals <= 0) {
+                    $totalWithdrawals = (float)$row['total'];
+                }
             }
         }
 
-        // Net savings = Total Contributions − Total Withdrawals
-        $netSavings = $totalContribution - $totalWithdrawals;
+        // Akiba Wallet = Total Akiba minus Total Withdrawals
+        $akibaWallet = max(0.00, $totalAkiba - $totalWithdrawals);
+        $netSavings = $akibaWallet;
 
         $segments = $result['segments'] ?? [];
         $depositAmount = 0.00;
@@ -154,12 +173,15 @@ try {
             $allocation[] = 'Deposit KES ' . number_format($depositAmount, 2);
         }
         if ($contributionAmount > 0) {
-            $allocation[] = 'Contribution KES ' . number_format($contributionAmount, 2);
+            $ushirikaCut = round($contributionAmount * 0.05, 2);
+            $akibaCut = round($contributionAmount - $ushirikaCut, 2);
+            $allocation[] = 'Akiba (95%) KES ' . number_format($akibaCut, 2);
+            $allocation[] = 'Ushirika (5%) KES ' . number_format($ushirikaCut, 2);
         }
         $allocationText = $allocation ? ' Allocation: ' . implode(', ', $allocation) . '.' : '';
 
         $tranDate = !empty($data['TranTime']) ? date('d-M-Y', strtotime($data['TranTime'])) : date('d-M-Y');
-        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} on {$tranDate}.{$allocationText} Total Contributions: KES " . number_format($totalContribution, 2) . ". Net Savings: KES " . number_format($netSavings, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
+        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} on {$tranDate}.{$allocationText} Akiba Wallet: KES " . number_format($akibaWallet, 2) . ". Ushirika Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
         if ($memberPhone !== '') {

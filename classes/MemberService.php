@@ -190,13 +190,26 @@ class MemberService
 
     public static function linkUnmatchedContributions(string $memberId, string $nationalId): void
     {
-        $stmt = Database::connection()->prepare(
+        $pdo = Database::connection();
+        $stmt = $pdo->prepare(
             'UPDATE member_transactions SET MemberID = :member_id WHERE NationalID = :national_id AND MemberID IS NULL'
         );
         $stmt->execute([
             ':member_id' => $memberId,
             ':national_id' => $nationalId,
         ]);
+
+        try {
+            $walletStmt = $pdo->prepare(
+                'UPDATE SaccoWallets SET MemberID = :member_id WHERE NationalID = :national_id AND MemberID IS NULL'
+            );
+            $walletStmt->execute([
+                ':member_id' => $memberId,
+                ':national_id' => $nationalId,
+            ]);
+        } catch (Throwable $e) {
+            // SaccoWallets table may not exist yet
+        }
     }
 
     public static function currentDepositAmount(): float
@@ -263,6 +276,38 @@ class MemberService
             ':description' => $data['Description'] ?? null,
             ':tran_time' => $data['TranTime'] ?? null,
         ]);
+
+        if (($data['TransactionType'] ?? '') === 'contribution') {
+            try {
+                $transactionId = (int)$pdo->lastInsertId();
+                $amount = (float)$data['Amount'];
+                $ushirikaAmount = round($amount * 0.05, 2);
+                $akibaAmount = round($amount - $ushirikaAmount, 2);
+
+                $walletStmt = $pdo->prepare("
+                    INSERT INTO SaccoWallets
+                    (TransactionID, TranID, MemberID, NationalID, Amount, AkibaAmount, UshirikaAmount, CreatedAt)
+                    VALUES
+                    (:tx_id, :tran_id, :member_id, :national_id, :amount, :akiba, :ushirika, :created_at)
+                    ON DUPLICATE KEY UPDATE
+                    Amount = VALUES(Amount),
+                    AkibaAmount = VALUES(AkibaAmount),
+                    UshirikaAmount = VALUES(UshirikaAmount)
+                ");
+                $walletStmt->execute([
+                    ':tx_id' => $transactionId,
+                    ':tran_id' => $data['TranID'],
+                    ':member_id' => $data['MemberID'] ?: null,
+                    ':national_id' => $data['NationalID'],
+                    ':amount' => $amount,
+                    ':akiba' => $akibaAmount,
+                    ':ushirika' => $ushirikaAmount,
+                    ':created_at' => $data['TranTime'] ?? date('Y-m-d H:i:s'),
+                ]);
+            } catch (Throwable $e) {
+                // Ignore if table not created yet
+            }
+        }
     }
 
     private static function boolValue($value): bool

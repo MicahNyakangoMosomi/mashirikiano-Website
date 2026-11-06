@@ -298,6 +298,60 @@ class Mpesa
             ':description' => $description,
             ':tran_time' => $data['TranTime'],
         ]);
+
+        $transactionId = (int)$pdo->lastInsertId();
+
+        if ($type === 'contribution') {
+            self::ensureSaccoWalletsTable($pdo);
+            $ushirikaAmount = round($amount * 0.05, 2);
+            $akibaAmount = round($amount - $ushirikaAmount, 2);
+
+            $walletStmt = $pdo->prepare("
+                INSERT INTO SaccoWallets
+                (TransactionID, TranID, MemberID, NationalID, Amount, AkibaAmount, UshirikaAmount, CreatedAt)
+                VALUES
+                (:tx_id, :tran_id, :member_id, :national_id, :amount, :akiba, :ushirika, :created_at)
+                ON DUPLICATE KEY UPDATE
+                Amount = VALUES(Amount),
+                AkibaAmount = VALUES(AkibaAmount),
+                UshirikaAmount = VALUES(UshirikaAmount)
+            ");
+            $walletStmt->execute([
+                ':tx_id' => $transactionId,
+                ':tran_id' => $data['TranID'],
+                ':member_id' => $member ? (string)$member['MemberID'] : null,
+                ':national_id' => $data['NationalID'],
+                ':amount' => $amount,
+                ':akiba' => $akibaAmount,
+                ':ushirika' => $ushirikaAmount,
+                ':created_at' => $data['TranTime'] ?: date('Y-m-d H:i:s'),
+            ]);
+        }
+    }
+
+    public static function ensureSaccoWalletsTable(PDO $pdo): void
+    {
+        try {
+            $pdo->query("SELECT 1 FROM `SaccoWallets` LIMIT 1");
+        } catch (Throwable $e) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `SaccoWallets` (
+              `WalletRecordID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `TransactionID` BIGINT UNSIGNED NOT NULL,
+              `TranID` VARCHAR(60) NOT NULL,
+              `MemberID` VARCHAR(40) NULL,
+              `NationalID` VARCHAR(30) NOT NULL,
+              `Amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+              `AkibaAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+              `UshirikaAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+              `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `UpdatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (`WalletRecordID`),
+              UNIQUE KEY `uniq_sacco_wallets_transaction` (`TransactionID`),
+              KEY `idx_sacco_wallets_tran_id` (`TranID`),
+              KEY `idx_sacco_wallets_member` (`MemberID`),
+              KEY `idx_sacco_wallets_national_id` (`NationalID`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        }
     }
 
     /**

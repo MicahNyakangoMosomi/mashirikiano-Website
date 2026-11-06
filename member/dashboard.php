@@ -97,17 +97,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_loan'])) {
     }
 }
 
-// Fetch totals & dashboard info
-$totalStmt = $pdo->prepare("SELECT
-  COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount ELSE 0 END), 0) AS TotalContributions,
-  COALESCE(SUM(CASE WHEN TransactionType = 'withdrawal' THEN Amount ELSE 0 END), 0) AS TotalWithdrawals
-  FROM member_transactions
+// Fetch totals & dashboard info from SaccoWallets and withdrawals table
+$walletStmt = $pdo->prepare("SELECT
+  COALESCE(SUM(Amount), 0) AS TotalContributions,
+  COALESCE(SUM(AkibaAmount), 0) AS TotalAkiba,
+  COALESCE(SUM(UshirikaAmount), 0) AS TotalUshirika
+  FROM SaccoWallets
   WHERE MemberID = :member_id");
-$totalStmt->execute([':member_id' => $member['MemberID']]);
-$totals = $totalStmt->fetch() ?: [];
-$totalContributions = (float)($totals['TotalContributions'] ?? 0);
-$totalWithdrawals = (float)($totals['TotalWithdrawals'] ?? 0);
-$netSavings = max(0.00, $totalContributions - $totalWithdrawals);
+$walletTotals = [];
+try {
+    $walletStmt->execute([':member_id' => $member['MemberID']]);
+    $walletTotals = $walletStmt->fetch() ?: [];
+} catch (Throwable $e) {}
+
+$totalContributions = (float)($walletTotals['TotalContributions'] ?? 0);
+$totalAkiba = (float)($walletTotals['TotalAkiba'] ?? 0);
+$totalUshirika = (float)($walletTotals['TotalUshirika'] ?? 0);
+
+// Withdrawals directly from withdrawals table
+$wStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM withdrawals WHERE MemberID = :member_id");
+$totalWithdrawals = 0.00;
+try {
+    $wStmt->execute([':member_id' => $member['MemberID']]);
+    $totalWithdrawals = (float)$wStmt->fetchColumn();
+} catch (Throwable $e) {}
+
+// Fallback to member_transactions if SaccoWallets not yet backfilled or withdrawals empty
+if ($totalContributions <= 0) {
+    $totalStmt = $pdo->prepare("SELECT
+      COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount ELSE 0 END), 0) AS TotalContributions,
+      COALESCE(SUM(CASE WHEN TransactionType = 'withdrawal' THEN Amount ELSE 0 END), 0) AS TotalWithdrawals
+      FROM member_transactions
+      WHERE MemberID = :member_id");
+    $totalStmt->execute([':member_id' => $member['MemberID']]);
+    $totals = $totalStmt->fetch() ?: [];
+    $rawContrib = (float)($totals['TotalContributions'] ?? 0);
+    $totalContributions = $rawContrib;
+    $totalAkiba = round($rawContrib * 0.95, 2);
+    $totalUshirika = round($rawContrib * 0.05, 2);
+    if ($totalWithdrawals <= 0) {
+        $totalWithdrawals = (float)($totals['TotalWithdrawals'] ?? 0);
+    }
+}
+
+// Akiba Wallet = Total Akiba funds (95%) minus Total Withdrawals
+$akibaWallet = max(0.00, $totalAkiba - $totalWithdrawals);
+$netSavings = $akibaWallet;
 
 $recentStmt = $pdo->prepare("SELECT * FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal') ORDER BY COALESCE(TranTime, CreatedAt) DESC LIMIT 8");
 $recentStmt->execute([':member_id' => $member['MemberID']]);
@@ -380,24 +415,50 @@ function dashboardUrl(array $params): string
         </section>
 
         <div class="row g-3 mb-4">
-          <div class="col-md-6">
+          <div class="col-md-6 col-lg-3">
+            <div class="card metric h-100">
+              <div class="card-body d-flex align-items-center gap-3">
+                <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
+                <div>
+                  <div class="text-muted small">Akiba Wallet</div>
+                  <div class="h4 fw-bold mb-0 text-success">KES <?= number_format($akibaWallet, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.72rem;">Available net savings (95%)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-3">
+            <div class="card metric h-100">
+              <div class="card-body d-flex align-items-center gap-3">
+                <span class="metric-icon" style="background:#f3e8ff; color:#7c3aed;"><i class="bi bi-pie-chart"></i></span>
+                <div>
+                  <div class="text-muted small">Ushirika Shares</div>
+                  <div class="h4 fw-bold mb-0" style="color:#7c3aed;">KES <?= number_format($totalUshirika, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.72rem;">5% allocated member shares</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6 col-lg-3">
             <div class="card metric h-100">
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
                 <div>
                   <div class="text-muted small">Total Contributions</div>
                   <div class="h4 fw-bold mb-0">KES <?= number_format($totalContributions, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.72rem;">Cumulative savings deposits</div>
                 </div>
               </div>
             </div>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-6 col-lg-3">
             <div class="card metric h-100">
               <div class="card-body d-flex align-items-center gap-3">
-                <span class="metric-icon"><i class="bi bi-piggy-bank"></i></span>
+                <span class="metric-icon danger"><i class="bi bi-box-arrow-up-right"></i></span>
                 <div>
-                  <div class="text-muted small">Net Savings</div>
-                  <div class="h4 fw-bold mb-0">KES <?= number_format($netSavings, 2) ?></div>
+                  <div class="text-muted small">Total Withdrawals</div>
+                  <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalWithdrawals, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.72rem;">Total cash released</div>
                 </div>
               </div>
             </div>
@@ -405,17 +466,6 @@ function dashboardUrl(array $params): string
         </div>
 
         <div class="row g-3 mb-4">
-          <div class="col-md-6">
-            <div class="card metric h-100">
-              <div class="card-body d-flex align-items-center gap-3">
-                <span class="metric-icon danger"><i class="bi bi-box-arrow-up-right"></i></span>
-                <div>
-                  <div class="text-muted small">Total Withdrawals</div>
-                  <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalWithdrawals, 2) ?></div>
-                </div>
-              </div>
-            </div>
-          </div>
           <div class="col-md-6">
             <div class="card metric h-100">
               <div class="card-body d-flex align-items-center gap-3">

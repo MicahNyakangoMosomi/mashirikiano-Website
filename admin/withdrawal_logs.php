@@ -21,6 +21,15 @@ if (isset($_SESSION['flash_message'])) {
 // Self-healing table creation for withdrawals
 try {
     $pdo->query("SELECT 1 FROM `withdrawals` LIMIT 1");
+    // Ensure TranID and Reference exist in withdrawals
+    $cols = $pdo->query("SHOW COLUMNS FROM `withdrawals` LIKE 'TranID'")->fetch();
+    if (!$cols) {
+        $pdo->exec("ALTER TABLE `withdrawals` ADD COLUMN `TranID` VARCHAR(60) NULL AFTER `AdminUserID`");
+    }
+    $refCols = $pdo->query("SHOW COLUMNS FROM `withdrawals` LIKE 'Reference'")->fetch();
+    if (!$refCols) {
+        $pdo->exec("ALTER TABLE `withdrawals` ADD COLUMN `Reference` VARCHAR(120) NULL AFTER `TranID`");
+    }
 } catch (Throwable $e) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS `withdrawals` (
       `WithdrawalID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -29,14 +38,14 @@ try {
       `WithdrawalDate` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       `Description` VARCHAR(255) NULL,
       `AdminUserID` INT UNSIGNED NULL,
+      `TranID` VARCHAR(60) NULL,
+      `Reference` VARCHAR(120) NULL,
       `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (`WithdrawalID`),
       KEY `idx_withdrawals_member` (`MemberID`),
       KEY `idx_withdrawals_date` (`WithdrawalDate`),
-      CONSTRAINT `fk_withdrawals_member`
-        FOREIGN KEY (`MemberID`) REFERENCES `members` (`MemberID`)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
+      KEY `idx_withdrawals_tran_id` (`TranID`),
+      KEY `idx_withdrawals_reference` (`Reference`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
 }
 
@@ -269,7 +278,7 @@ $netSavingsPool = max(0.00, $allContributions - $totalWithdrawn);
               <?php else: ?>
                 <?php foreach ($withdrawalHistory as $w): ?>
                   <tr>
-                    <td class="ps-3 fw-bold text-secondary">WD-<?= (int)$w['WithdrawalID'] ?></td>
+                    <td class="ps-3 fw-bold text-secondary"><?= e(!empty($w['Reference']) ? $w['Reference'] : ('WD-' . (int)$w['WithdrawalID'])) ?><?php if (!empty($w['TranID'])): ?><div class="small text-muted font-monospace" style="font-size:0.7rem;"><?= e($w['TranID']) ?></div><?php endif; ?></td>
                     <td class="fw-semibold text-primary"><?= e($w['MemberID']) ?></td>
                     <td class="fw-bold"><?= e(trim($w['FirstName'] . ' ' . $w['LastName'])) ?></td>
                     <td><?= e($w['NationalID']) ?></td>
