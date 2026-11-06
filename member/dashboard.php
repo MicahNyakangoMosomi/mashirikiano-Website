@@ -415,50 +415,38 @@ function dashboardUrl(array $params): string
         </section>
 
         <div class="row g-3 mb-4">
-          <div class="col-md-6 col-lg-3">
-            <div class="card metric h-100">
+          <div class="col-md-6 col-lg-4">
+            <div class="card metric h-100" style="border-left: 4px solid #218c74;">
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
                 <div>
-                  <div class="text-muted small">Akiba Wallet</div>
-                  <div class="h4 fw-bold mb-0 text-success">KES <?= number_format($akibaWallet, 2) ?></div>
-                  <div class="small text-muted" style="font-size:0.72rem;">Available net savings (95%)</div>
+                  <div class="text-muted small text-uppercase fw-bold">Current Akiba Amount</div>
+                  <div class="h3 fw-bold mb-0 text-success">KES <?= number_format($akibaWallet, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Available everyday net savings (95%)</div>
                 </div>
               </div>
             </div>
           </div>
-          <div class="col-md-6 col-lg-3">
-            <div class="card metric h-100">
+          <div class="col-md-6 col-lg-4">
+            <div class="card metric h-100" style="border-left: 4px solid #7c3aed;">
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon" style="background:#f3e8ff; color:#7c3aed;"><i class="bi bi-pie-chart"></i></span>
                 <div>
-                  <div class="text-muted small">Ushirika Shares</div>
-                  <div class="h4 fw-bold mb-0" style="color:#7c3aed;">KES <?= number_format($totalUshirika, 2) ?></div>
-                  <div class="small text-muted" style="font-size:0.72rem;">5% allocated member shares</div>
+                  <div class="text-muted small text-uppercase fw-bold">Ushirika Amount</div>
+                  <div class="h3 fw-bold mb-0" style="color:#7c3aed;">KES <?= number_format($totalUshirika, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Retained cooperative member shares (5%)</div>
                 </div>
               </div>
             </div>
           </div>
-          <div class="col-md-6 col-lg-3">
-            <div class="card metric h-100">
-              <div class="card-body d-flex align-items-center gap-3">
-                <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
-                <div>
-                  <div class="text-muted small">Total Contributions</div>
-                  <div class="h4 fw-bold mb-0">KES <?= number_format($totalContributions, 2) ?></div>
-                  <div class="small text-muted" style="font-size:0.72rem;">Cumulative savings deposits</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-md-6 col-lg-3">
-            <div class="card metric h-100">
+          <div class="col-md-6 col-lg-4">
+            <div class="card metric h-100" style="border-left: 4px solid #dc3545;">
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon danger"><i class="bi bi-box-arrow-up-right"></i></span>
                 <div>
-                  <div class="text-muted small">Total Withdrawals</div>
-                  <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalWithdrawals, 2) ?></div>
-                  <div class="small text-muted" style="font-size:0.72rem;">Total cash released</div>
+                  <div class="text-muted small text-uppercase fw-bold">Total Withdrawals</div>
+                  <div class="h3 fw-bold mb-0 text-danger">KES <?= number_format($totalWithdrawals, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Total cash released from savings</div>
                 </div>
               </div>
             </div>
@@ -469,10 +457,23 @@ function dashboardUrl(array $params): string
           <div class="col-md-6">
             <div class="card metric h-100">
               <div class="card-body d-flex align-items-center gap-3">
+                <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
+                <div>
+                  <div class="text-muted small text-uppercase fw-bold">Total Contributions</div>
+                  <div class="h4 fw-bold mb-0">KES <?= number_format($totalContributions, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Cumulative lifetime savings deposits</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card metric h-100">
+              <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon danger"><i class="bi bi-cash-stack"></i></span>
                 <div>
-                  <div class="text-muted small">Total Loan Balance</div>
+                  <div class="text-muted small text-uppercase fw-bold">Total Loan Balance</div>
                   <div class="h4 fw-bold mb-0">KES <?= number_format($totalLoanBalance, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Active approved borrowing facilities</div>
                 </div>
               </div>
             </div>
@@ -488,14 +489,21 @@ function dashboardUrl(array $params): string
                   <a class="remarks-link" href="?tab=record">View all</a>
                 </div>
                 <?php foreach ($recentTransactions as $transaction): ?>
-                  <?php $isWithdrawal = $transaction['TransactionType'] === 'withdrawal'; ?>
+                  <?php
+                    $isWithdrawal = $transaction['TransactionType'] === 'withdrawal';
+                    $isTransfer = ($transaction['TransactionCategory'] ?? '') === 'credit_transfer';
+                  ?>
                   <div class="recent-row">
-                    <span class="recent-icon <?= $isWithdrawal ? 'danger' : '' ?>"><i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : 'bi-arrow-down-left' ?>"></i></span>
+                    <span class="recent-icon <?= $isWithdrawal ? 'danger' : ($isTransfer ? 'primary' : '') ?>">
+                      <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : 'bi-arrow-down-left') ?>"></i>
+                    </span>
                     <div class="flex-grow-1">
                       <div class="fw-bold"><?= e($transaction['TranID']) ?></div>
-                      <div class="text-muted small"><?= $isWithdrawal ? 'Withdrawal' : 'Contribution' ?> &middot; <?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['MSISDN']) ?></div>
+                      <div class="text-muted small"><?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : 'Contribution') ?> &middot; <?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['Description'] ?: $transaction['MSISDN']) ?></div>
                     </div>
-                    <div class="fw-bold <?= $isWithdrawal ? 'text-danger' : 'text-success' ?> text-end"><?= $isWithdrawal ? '-' : '+' ?> KES <?= number_format((float)$transaction['Amount'], 2) ?></div>
+                    <div class="fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : 'text-success') ?> text-end">
+                      <?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : '+') ?> KES <?= number_format((float)$transaction['Amount'], 2) ?>
+                    </div>
                   </div>
                 <?php endforeach; ?>
                 <?php if (!$recentTransactions): ?>
@@ -681,12 +689,15 @@ function dashboardUrl(array $params): string
                     <tr>
                       <td class="fw-bold text-primary"><?= e($row['TranID']) ?></td>
                       <td><?= e($row['TranTime'] ?: $row['CreatedAt']) ?></td>
-                      <?php $isWithdrawal = $row['TransactionType'] === 'withdrawal'; ?>
-                      <td class="<?= $isWithdrawal ? 'text-danger' : 'text-success' ?> fw-semibold">
-                        <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : 'bi-arrow-down-left' ?> me-1" aria-hidden="true"></i>
-                        <?= $isWithdrawal ? 'Withdrawal' : 'Contribution' ?>
+                      <?php
+                        $isWithdrawal = $row['TransactionType'] === 'withdrawal';
+                        $isTransfer = ($row['TransactionCategory'] ?? '') === 'credit_transfer';
+                      ?>
+                      <td class="<?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : 'text-success') ?> fw-semibold">
+                        <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : 'bi-arrow-down-left') ?> me-1" aria-hidden="true"></i>
+                        <?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : 'Contribution') ?>
                       </td>
-                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : 'text-success' ?>"><?= $isWithdrawal ? '-' : '+' ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
+                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : 'text-success') ?>"><?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : '+') ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
                     </tr>
                   <?php endforeach; ?>
                   <?php if (!$paginatedTransactions): ?>

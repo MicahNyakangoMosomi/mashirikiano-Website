@@ -25,6 +25,7 @@ if (!function_exists('admin_header')) {
                     'withdrawal_logs' => ['label' => 'Withdrawal Logs', 'url' => 'withdrawal_logs.php'],
                 ]
             ],
+            'credit_transfer' => ['label' => 'Credit Transfer', 'url' => 'credit_transfer.php'],
             'messages' => ['label' => 'Messages', 'url' => 'messages.php'],
             'settings' => ['label' => 'Settings', 'url' => 'settings.php'],
         ];

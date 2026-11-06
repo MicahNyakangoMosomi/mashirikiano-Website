@@ -197,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
 
         $fullName = trim($member['FirstName'] . ' ' . $member['LastName']);
         $displayDate = date('d-M-Y', strtotime($formattedDate));
-        $smsMsg = "Dear {$fullName}, a withdrawal of KES " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Your new Akiba wallet balance is KES " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
+        $smsMsg = "Dear {$fullName}, a withdrawal of KES " . number_format($amount, 2) . " was processed from your Mashirikiano SACCO account on {$displayDate}. Current Akiba Wallet: KES " . number_format($newBalance, 2) . ".\n\n[SACCO Offer]: {$randomAd}";
         SmsService::sendSms($member['PrimaryNumber'], $smsMsg);
 
         $_SESSION['flash_message'] = "Withdrawal of KES " . number_format($amount, 2) . " for " . e($fullName) . " ({$memberId}) processed successfully!";

@@ -181,7 +181,7 @@ try {
         $allocationText = $allocation ? ' Allocation: ' . implode(', ', $allocation) . '.' : '';
 
         $tranDate = !empty($data['TranTime']) ? date('d-M-Y', strtotime($data['TranTime'])) : date('d-M-Y');
-        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} on {$tranDate}.{$allocationText} Akiba Wallet: KES " . number_format($akibaWallet, 2) . ". Ushirika Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
+        $smsMessage = "Confirmed. KES {$amount} received from {$fullName} (ID {$nationalId}) Ref {$tranId} on {$tranDate}.{$allocationText} Current Akiba Wallet: KES " . number_format($akibaWallet, 2) . ". Ushirika Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557 or email support@mashirikianosacco.co.ke.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
         if ($memberPhone !== '') {

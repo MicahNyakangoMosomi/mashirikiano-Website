@@ -196,6 +196,7 @@ The migration is split into self-contained files:
 | `database/alter_withdrawals_link_transactions.sql` | Adds `TranID` & `Reference` to `withdrawals`, backfills existing rows (`WD-1` to `WD-8`), and sets the Foreign Key constraint. |
 | `database/create_sacco_wallets.sql` | Creates the `SaccoWallets` table with constraints and indexes. |
 | `database/seed_sacco_wallets.sql` | Backfills `SaccoWallets` from all existing `contribution` rows in `member_transactions` (95% Akiba / 5% Ushirika). |
+| `database/credit_transfer_migration.sql` | Creates the `credit_transfers` table for internal wallet transfer audit logs. |
 | `database/member_wallet_balances_view.sql` | Creates the `member_wallet_balances` view for reporting and balances. |
 | `database/schema.sql` | Full schema reference updated with all changes. |
 
@@ -205,6 +206,7 @@ Run the files in your database tool (e.g. phpMyAdmin, MySQL Workbench, or CLI):
 mysql -u <user> -p mashirikianosacc_mashirikiano < database/alter_withdrawals_link_transactions.sql
 mysql -u <user> -p mashirikianosacc_mashirikiano < database/create_sacco_wallets.sql
 mysql -u <user> -p mashirikianosacc_mashirikiano < database/seed_sacco_wallets.sql
+mysql -u <user> -p mashirikianosacc_mashirikiano < database/credit_transfer_migration.sql
 mysql -u <user> -p mashirikianosacc_mashirikiano < database/member_wallet_balances_view.sql
 ```
 
@@ -212,6 +214,15 @@ mysql -u <user> -p mashirikianosacc_mashirikiano < database/member_wallet_balanc
 
 ## 6. Summary of Modified Codebase Files
 
+- **`admin/admin_layout.php`**:
+  - Added **Credit Transfer** to the sidebar navigation.
+- **`admin/credit_transfer.php`**:
+  - Complete admin interface listing users, Current Akiba, and Current Ushirika.
+  - Transfer pop-up modal with direction dropdown (`[Akiba, Ushirika]`), amount, and live validation.
+  - Secondary confirmation dialog ("Yes, Transfer Now" / "Cancel") before execution.
+  - Atomic database transactions updating `credit_transfers`, `member_transactions`, and `SaccoWallets`.
+  - Dispatches transfer confirmation SMS to members.
+  - Audit log table displaying all completed transfers.
 - **`classes/Mpesa.php`**: 
   - Splits contribution payments 95%/5% and inserts into `SaccoWallets`.
   - Added self-healing `ensureSaccoWalletsTable()` method.
@@ -222,12 +233,45 @@ mysql -u <user> -p mashirikianosacc_mashirikiano < database/member_wallet_balanc
   - Calculates maximum withdrawable balance strictly from the **Akiba Wallet** (`TotalAkiba - TotalWithdrawals`).
   - Inserts ledger transaction first, then withdrawals record with `TranID` as FK, and links both with `Reference = WD-<id>`.
   - Displays **Akiba Wallet** and **Ushirika Shares** in member table and summary cards.
+  - SMS notification explicitly displays **Current Akiba Wallet**.
 - **`admin/withdrawal_logs.php`**:
   - Displays the linked `Reference` (e.g. `WD-6`) and `TranID` for audit tracking.
 - **`member/dashboard.php`**:
-  - Added metric cards for **Akiba Wallet**, **Ushirika Shares**, **Total Contributions**, and **Total Withdrawals**.
+  - Member UI features **Current Akiba Amount**, **Ushirika Amount**, and **Total Withdrawals** prominently with color-coded borders.
+  - Transactions list clearly highlights internal transfers (`↔ KES X.XX`).
 - **`admin/index.php`**:
   - Updated metrics grid to show **Akiba Wallet (Net Savings)** and **Ushirika Shares**.
 - **`api/callback.php`**:
-  - Queries `SaccoWallets` and `withdrawals` to format confirmation SMS with Akiba Wallet balance and Ushirika Shares.
+  - Queries `SaccoWallets` and `withdrawals` to format confirmation SMS explicitly showing **Current Akiba Wallet** and **Ushirika Shares**.
+
+---
+
+## 7. Credit Transfer Business Logic & Mathematical Consistency
+
+### 7.1 Transfer Mechanics
+The admin interface allows shifting funds between the member's two wallets:
+- **Akiba $\rightarrow$ Ushirika**: Transferred amount cannot exceed member's available `CurrentAkiba`.
+- **Ushirika $\rightarrow$ Akiba**: Transferred amount cannot exceed member's available `CurrentUshirika`.
+
+### 7.2 Zero-Leakage Double Entry Shift
+When a transfer of amount $X$ occurs:
+1. `credit_transfers` records:
+   - Previous balances ($Akiba_{prev}, Ushirika_{prev}$)
+   - Transferred amount $X$
+   - New balances ($Akiba_{new}, Ushirika_{new}$)
+   - Authorizing admin ID, name, notes, and timestamp.
+2. `member_transactions` records:
+   - Ledger entry with unique `TR-XXXXXXXXXX` code.
+   - `TransactionCategory = 'credit_transfer'`.
+3. `SaccoWallets` records:
+   - Gross Amount = $0.00$ (no capital enters or leaves the SACCO).
+   - If Akiba $\rightarrow$ Ushirika:
+     $$\Delta \text{Akiba} = -X, \quad \Delta \text{Ushirika} = +X$$
+   - If Ushirika $\rightarrow$ Akiba:
+     $$\Delta \text{Akiba} = +X, \quad \Delta \text{Ushirika} = -X$$
+
+Because all wallet calculations aggregate $\sum(\text{AkibaAmount})$ and $\sum(\text{UshirikaAmount})$ from `SaccoWallets`:
+- **Current Akiba** updates instantly across all portals.
+- **Current Ushirika** updates instantly across all portals.
+- The member receives an SMS notification with their updated balances.
 
