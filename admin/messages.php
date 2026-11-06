@@ -417,7 +417,7 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
           <button class="msg-tab-btn <?= $initialTab === 'bulk' ? 'active' : '' ?>" id="tab-bulk-btn"
                   role="tab" aria-selected="<?= $initialTab === 'bulk' ? 'true' : 'false' ?>" aria-controls="panel-bulk"
                   onclick="switchTab('bulk')">
-            Broadcast to Active Members
+            Broadcast to Members
             <span class="tab-sub">Choose active, pending, or all members</span>
           </button>
           <button class="msg-tab-btn <?= $initialTab === 'single' ? 'active' : '' ?>" id="tab-single-btn"
@@ -440,7 +440,7 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
                 <select class="form-select" name="recipient_group" id="broadcastAudience" onchange="updateBroadcastAudience()">
                   <option value="active" data-count="<?= (int)$activeRecipients ?>" data-label="active members" selected>Broadcast to active members (<?= (int)$activeRecipients ?>)</option>
                   <option value="pending" data-count="<?= (int)$pendingRecipients ?>" data-label="pending members">Broadcast to pending members (<?= (int)$pendingRecipients ?>)</option>
-                  <option value="all" data-count="<?= (int)$totalEligibleRecipients ?>" data-label="all members (Active and Pending)">Broadcast to all members — Active and Pending (<?= (int)$totalEligibleRecipients ?>)</option>
+                  <option value="all" data-count="<?= (int)$totalEligibleRecipients ?>" data-label="all members (Active and Pending)">Broadcast to all members [Active and Pending] (<?= (int)$totalEligibleRecipients ?>)</option>
                 </select>
                 <div class="mt-2">
                   <span class="recipient-badge" id="broadcastRecipientSummary">Broadcast to active members (<?= (int)$activeRecipients ?>)</span>
