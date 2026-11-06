@@ -120,13 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
         $akibaStmt->execute([':mid' => $memberId]);
         $totalAkiba = (float)$akibaStmt->fetchColumn();
 
-        // Fallback: If SaccoWallets hasn't been backfilled yet for this member, calculate 95% of member_transactions contributions
+        // Fallback: If SaccoWallets hasn't been backfilled yet for this member, all past contributions are in Akiba
         if ($totalAkiba <= 0) {
             $contribStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM member_transactions WHERE MemberID = :mid AND TransactionType = 'contribution'");
             $contribStmt->execute([':mid' => $memberId]);
             $rawContrib = (float)$contribStmt->fetchColumn();
             if ($rawContrib > 0) {
-                $totalAkiba = round($rawContrib * 0.95, 2);
+                $totalAkiba = $rawContrib;
             }
         }
 
@@ -241,10 +241,10 @@ $offset = ($page - 1) * $limit;
 $membersStmt = $pdo->prepare("
     SELECT m.*,
         COALESCE(sw.TotalContributions, c.TotalContributions, 0) AS TotalContributions,
-        COALESCE(sw.TotalAkiba, c.TotalContributions * 0.95, 0) AS TotalAkiba,
-        COALESCE(sw.TotalUshirika, c.TotalContributions * 0.05, 0) AS TotalUshirika,
+        COALESCE(sw.TotalAkiba, c.TotalContributions, 0) AS TotalAkiba,
+        COALESCE(sw.TotalUshirika, 0) AS TotalUshirika,
         COALESCE(w.TotalWithdrawals, 0) AS TotalWithdrawals,
-        GREATEST(0.00, COALESCE(sw.TotalAkiba, c.TotalContributions * 0.95, 0) - COALESCE(w.TotalWithdrawals, 0)) AS AkibaWallet
+        GREATEST(0.00, COALESCE(sw.TotalAkiba, c.TotalContributions, 0) - COALESCE(w.TotalWithdrawals, 0)) AS AkibaWallet
     FROM members m
     LEFT JOIN (
         SELECT MemberID,
@@ -287,8 +287,8 @@ $summaryStats = $pdo->query("
 
 $activeCount = (int)($summaryStats['ActiveCount'] ?? 0);
 $allContributions = (float)($summaryStats['TotalWalletContributions'] ?: $summaryStats['FallbackContributions'] ?: 0);
-$allAkiba = (float)($summaryStats['TotalAkiba'] ?: ($allContributions * 0.95));
-$allUshirika = (float)($summaryStats['TotalUshirika'] ?: ($allContributions * 0.05));
+$allAkiba = (float)($summaryStats['TotalAkiba'] ?: $allContributions);
+$allUshirika = (float)($summaryStats['TotalUshirika'] ?? 0);
 $allWithdrawals = (float)($summaryStats['TotalWithdrawals'] ?? 0);
 $totalAkibaWallet = max(0.00, $allAkiba - $allWithdrawals);
 

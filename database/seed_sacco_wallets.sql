@@ -6,9 +6,9 @@ USE `mashirikianosacc_mashirikiano`;
 --   Populates `SaccoWallets` with existing contribution records from
 --   `member_transactions`.
 --   Allocates:
---     - 95% to Akiba Wallet (AkibaAmount)
---     - 5% to Ushirika Shares (UshirikaAmount)
---   Guarantees exact balancing: AkibaAmount + UshirikaAmount = Amount.
+--     - 100% of past contributions to Akiba Wallet (AkibaAmount)
+--     - 0.00 to Ushirika Shares (UshirikaAmount)
+--   New transactions going forward will automatically apply the 5% Ushirika split.
 -- ============================================================================
 
 INSERT INTO `SaccoWallets` (
@@ -27,13 +27,13 @@ SELECT
   mt.`MemberID`,
   mt.`NationalID`,
   mt.`Amount`,
-  ROUND(mt.`Amount` * 0.95, 2) AS `AkibaAmount`,
-  ROUND(mt.`Amount` - ROUND(mt.`Amount` * 0.95, 2), 2) AS `UshirikaAmount`,
+  mt.`Amount` AS `AkibaAmount`,
+  0.00 AS `UshirikaAmount`,
   COALESCE(mt.`TranTime`, mt.`CreatedAt`) AS `CreatedAt`
 FROM `member_transactions` mt
 WHERE mt.`TransactionType` = 'contribution'
 ON DUPLICATE KEY UPDATE
   `Amount` = VALUES(`Amount`),
-  `AkibaAmount` = VALUES(`AkibaAmount`),
-  `UshirikaAmount` = VALUES(`UshirikaAmount`);
+  `AkibaAmount` = VALUES(`Amount`),
+  `UshirikaAmount` = 0.00;
 
