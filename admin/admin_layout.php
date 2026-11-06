@@ -25,7 +25,14 @@ if (!function_exists('admin_header')) {
                     'withdrawal_logs' => ['label' => 'Withdrawal Logs', 'url' => 'withdrawal_logs.php'],
                 ]
             ],
-            'credit_transfer' => ['label' => 'Credit Transfer', 'url' => 'credit_transfer.php'],
+            'credit_transfer' => [
+                'label' => 'Credit Transfer',
+                'url' => 'credit_transfer.php',
+                'sub' => [
+                    'credit_transfer' => ['label' => 'Transfer Credit', 'url' => 'credit_transfer.php'],
+                    'credit_transfer_logs' => ['label' => 'Credit Transfer Logs', 'url' => 'credit_transfer_logs.php'],
+                ]
+            ],
             'messages' => ['label' => 'Messages', 'url' => 'messages.php'],
             'settings' => ['label' => 'Settings', 'url' => 'settings.php'],
         ];
