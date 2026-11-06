@@ -329,34 +329,6 @@ $membersStmt = $pdo->prepare("
 $membersStmt->execute($params);
 $activeMembers = $membersStmt->fetchAll();
 
-// Summary stats
-$summaryStats = $pdo->query("
-    SELECT
-        (SELECT COUNT(*) FROM members WHERE Status = 'Active') AS ActiveCount,
-        (SELECT COALESCE(SUM(AkibaAmount), 0) FROM SaccoWallets) AS TotalAkibaPool,
-        (SELECT COALESCE(SUM(UshirikaAmount), 0) FROM SaccoWallets) AS TotalUshirikaPool,
-        (SELECT COALESCE(SUM(Amount), 0) FROM withdrawals) AS TotalWithdrawals,
-        (SELECT COUNT(*) FROM credit_transfers) AS TotalTransfersCount,
-        (SELECT COALESCE(SUM(Amount), 0) FROM credit_transfers) AS TotalTransferredAmount
-")->fetch();
-
-$activeCount = (int)($summaryStats['ActiveCount'] ?? 0);
-$totalWithdrawalsAll = (float)($summaryStats['TotalWithdrawals'] ?? 0);
-$allAkibaPool = max(0.00, (float)($summaryStats['TotalAkibaPool'] ?? 0) - $totalWithdrawalsAll);
-$allUshirikaPool = (float)($summaryStats['TotalUshirikaPool'] ?? 0);
-$totalTransfersCount = (int)($summaryStats['TotalTransfersCount'] ?? 0);
-$totalTransferredAmount = (float)($summaryStats['TotalTransferredAmount'] ?? 0);
-
-// Recent credit transfers history
-$historyStmt = $pdo->query("
-    SELECT ct.*, m.FirstName, m.LastName
-    FROM credit_transfers ct
-    JOIN members m ON m.MemberID = ct.MemberID
-    ORDER BY ct.CreatedAt DESC
-    LIMIT 8
-");
-$recentTransfers = $historyStmt->fetchAll();
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -395,59 +367,12 @@ $recentTransfers = $historyStmt->fetchAll();
       </div>
     <?php endif; ?>
 
-    <!-- Summary Metrics -->
-    <div class="row g-3 mb-4">
-      <div class="col-md-3">
-        <div class="card card-metric shadow-sm bg-white p-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="text-muted small text-uppercase fw-bold">Active Members</div>
-              <div class="h3 fw-bold mb-0 text-primary"><?= number_format($activeCount) ?></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card card-metric shadow-sm bg-white p-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="text-muted small text-uppercase fw-bold">Akiba Wallet Pool</div>
-              <div class="h3 fw-bold mb-0 text-success">KES <?= number_format($allAkibaPool, 2) ?></div>
-              <div class="small text-muted" style="font-size:0.75rem;">Everyday accessible savings</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card card-metric shadow-sm bg-white p-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="text-muted small text-uppercase fw-bold">Ushirika Shares Pool</div>
-              <div class="h3 fw-bold mb-0" style="color:#7c3aed;">KES <?= number_format($allUshirikaPool, 2) ?></div>
-              <div class="small text-muted" style="font-size:0.75rem;">Retained member capital shares</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card card-metric shadow-sm bg-white p-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <div>
-              <div class="text-muted small text-uppercase fw-bold">Transfers Completed</div>
-              <div class="h3 fw-bold mb-0 text-dark"><?= number_format($totalTransfersCount) ?></div>
-              <div class="small text-muted" style="font-size:0.75rem;">KES <?= number_format($totalTransferredAmount, 2) ?> moved</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Active Members Section (Rows of Users) -->
     <div class="card shadow-sm border-0 mb-4">
       <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
         <div>
-          <h2 class="h5 mb-0 fw-bold text-dark">Member Wallet Accounts</h2>
-          <div class="text-muted small">Select a member to transfer balances between Akiba Wallet and Ushirika Shares.</div>
+          <h2 class="h5 mb-0 fw-bold text-dark">Transfer Member Credit</h2>
+          <div class="text-muted small">Select an active member to move credit between Akiba Wallet and Ushirika Shares.</div>
         </div>
         <form class="d-flex gap-2" method="GET" action="credit_transfer.php">
           <div class="input-group input-group-sm">
@@ -541,69 +466,6 @@ $recentTransfers = $historyStmt->fetchAll();
           </nav>
         </div>
       <?php endif; ?>
-    </div>
-
-    <!-- Recent Transfer Audit Log -->
-    <div class="card shadow-sm border-0">
-      <div class="card-header bg-white py-3 border-bottom">
-        <h3 class="h6 mb-0 fw-bold text-dark"><i class="bi bi-clock-history text-primary me-2"></i>Recent Credit Transfers Audit Log</h3>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover table-custom align-middle mb-0">
-            <thead>
-              <tr>
-                <th class="ps-3">Ref Code</th>
-                <th>Member</th>
-                <th>Transfer Path</th>
-                <th class="text-end">Amount</th>
-                <th>Akiba Before &rarr; After</th>
-                <th>Ushirika Before &rarr; After</th>
-                <th>Authorized Admin</th>
-                <th>Timestamp</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if (empty($recentTransfers)): ?>
-                <tr>
-                  <td colspan="8" class="text-center py-4 text-muted">No credit transfers have been executed yet.</td>
-                </tr>
-              <?php else: ?>
-                <?php foreach ($recentTransfers as $t): ?>
-                  <?php $isToUshirika = ($t['TransferTo'] === 'ushirika'); ?>
-                  <tr>
-                    <td class="ps-3 fw-bold text-primary"><?= e($t['TransferCode']) ?></td>
-                    <td>
-                      <div class="fw-bold"><?= e(trim($t['FirstName'] . ' ' . $t['LastName'])) ?></div>
-                      <div class="small text-muted"><?= e($t['MemberID']) ?> &middot; ID <?= e($t['NationalID']) ?></div>
-                    </td>
-                    <td>
-                      <?php if ($isToUshirika): ?>
-                        <span class="badge badge-akiba">Akiba</span>
-                        <i class="bi bi-arrow-right transfer-arrow mx-1"></i>
-                        <span class="badge badge-ushirika">Ushirika</span>
-                      <?php else: ?>
-                        <span class="badge badge-ushirika">Ushirika</span>
-                        <i class="bi bi-arrow-right transfer-arrow mx-1"></i>
-                        <span class="badge badge-akiba">Akiba</span>
-                      <?php endif; ?>
-                    </td>
-                    <td class="text-end fw-bold font-monospace text-dark">KES <?= number_format((float)$t['Amount'], 2) ?></td>
-                    <td class="font-monospace small">
-                      <?= number_format((float)$t['PreviousAkiba'], 2) ?> &rarr; <strong class="text-success"><?= number_format((float)$t['NewAkiba'], 2) ?></strong>
-                    </td>
-                    <td class="font-monospace small">
-                      <?= number_format((float)$t['PreviousUshirika'], 2) ?> &rarr; <strong style="color:#7c3aed;"><?= number_format((float)$t['NewUshirika'], 2) ?></strong>
-                    </td>
-                    <td class="small text-muted"><?= e($t['AdminName'] ?: 'Admin #' . $t['AdminUserID']) ?></td>
-                    <td class="small text-muted"><?= date('d-M-Y H:i', strtotime($t['CreatedAt'])) ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
 
   </main>

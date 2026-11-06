@@ -160,22 +160,34 @@ $metrics = $pdo->query("
 ")->fetch();
 
 // ── Page Output ───────────────────────────────────────────────────────────────
-admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs');
 ?>
-<style>
-  .ctl-card { background:#fff; border-radius:12px; padding:1.5rem; box-shadow:0 2px 8px rgba(0,0,0,.07); }
-  .ctl-metric { text-align:center; }
-  .ctl-metric .val { font-size:1.6rem; font-weight:700; color:#0d6efd; }
-  .ctl-metric .lbl { font-size:.8rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; }
-  .badge-akiba    { background:#198754; color:#fff; padding:.25em .55em; border-radius:.4em; font-size:.78em; }
-  .badge-ushirika { background:#6610f2; color:#fff; padding:.25em .55em; border-radius:.4em; font-size:.78em; }
-  .arrow-sep { margin:0 .3em; color:#aaa; }
-  .tbl-sm td, .tbl-sm th { font-size:.82rem; padding:.45rem .6rem; vertical-align:middle; }
-  .search-row { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
-  .search-row input { max-width:280px; }
-</style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Credit Transfer Logs | Mashirikiano SACCO Admin</title>
+  <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
+  <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+  <link href="admin.css" rel="stylesheet">
+  <style>
+    body { background-color:#f4f6f9; font-family:system-ui,-apple-system,sans-serif; }
+    .ctl-metric { text-align:center; }
+    .ctl-metric .val { font-size:1.5rem; font-weight:700; color:#0d6efd; }
+    .ctl-metric .lbl { font-size:.8rem; color:#6c757d; text-transform:uppercase; letter-spacing:.04em; }
+    .badge-akiba { background:#e7f5ed; color:#087a43; border:1px solid #c3e6cb; padding:.25em .55em; border-radius:.4em; font-size:.78em; }
+    .badge-ushirika { background:#f3e8ff; color:#7c3aed; border:1px solid #ddd6fe; padding:.25em .55em; border-radius:.4em; font-size:.78em; }
+    .arrow-sep { margin:0 .3em; color:#64748b; }
+    .tbl-sm td, .tbl-sm th { font-size:.82rem; padding:.55rem .65rem; vertical-align:middle; }
+    .search-row { display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; }
+    .search-row input { max-width:360px; }
+  </style>
+</head>
+<body>
+<?php admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs'); ?>
 
-<div class="container-fluid admin-shell py-4">
+<main class="container-fluid admin-shell py-4">
 
   <?php if ($message !== ''): ?>
     <div class="alert alert-<?= ctl_e($messageType) ?> alert-dismissible fade show" role="alert">
@@ -185,17 +197,14 @@ admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs');
   <?php endif; ?>
 
   <!-- Page heading -->
-  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
     <div>
-      <h2 class="mb-0 fw-bold" style="font-size:1.35rem;">Credit Transfer Audit Log</h2>
+      <h1 class="h3 mb-1 fw-bold text-dark">Credit Transfer Logs</h1>
       <p class="text-muted mb-0" style="font-size:.85rem;">Complete history of all Akiba ↔ Ushirika credit transfers</p>
     </div>
     <div class="d-flex gap-2">
-      <a href="credit_transfer.php" class="btn btn-sm btn-outline-primary">
-        &#8592; Transfer Credit
-      </a>
-      <a href="?<?= http_build_query(array_merge($_GET, ['download' => 'pdf'])) ?>" class="btn btn-sm btn-danger">
-        &#128196; Download PDF
+      <a href="?<?= http_build_query(array_merge($_GET, ['download' => 'pdf'])) ?>" class="btn btn-danger fw-semibold shadow-sm">
+        <i class="bi bi-file-earmark-pdf me-1"></i> Download PDF
       </a>
     </div>
   </div>
@@ -203,25 +212,25 @@ admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs');
   <!-- Summary metric cards -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="ctl-card ctl-metric">
+      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric">
         <div class="val"><?= number_format((int)$metrics['total_transfers']) ?></div>
         <div class="lbl">Total Transfers</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="ctl-card ctl-metric">
+      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric">
         <div class="val">KES <?= number_format((float)$metrics['total_amount'], 2) ?></div>
         <div class="lbl">Total Amount Moved</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="ctl-card ctl-metric" style="border-top:3px solid #198754;">
+      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric" style="border-top:3px solid #198754;">
         <div class="val" style="color:#198754;">KES <?= number_format((float)$metrics['akiba_to_ushirika'], 2) ?></div>
         <div class="lbl">Akiba → Ushirika</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="ctl-card ctl-metric" style="border-top:3px solid #6610f2;">
+      <div class="card shadow-sm border-0 bg-white p-3 h-100 ctl-metric" style="border-top:3px solid #6610f2;">
         <div class="val" style="color:#6610f2;">KES <?= number_format((float)$metrics['ushirika_to_akiba'], 2) ?></div>
         <div class="lbl">Ushirika → Akiba</div>
       </div>
@@ -229,10 +238,11 @@ admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs');
   </div>
 
   <!-- Table card -->
-  <div class="ctl-card">
+  <div class="card shadow-sm border-0">
 
     <!-- Search & filter -->
-    <form method="GET" class="search-row">
+    <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-3 border-bottom">
+    <form method="GET" action="credit_transfer_logs.php" class="search-row">
       <input type="text" name="search" class="form-control form-control-sm"
              placeholder="Search by member, name, NatID, ref code, admin…"
              value="<?= ctl_e($search) ?>">
@@ -244,13 +254,15 @@ admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs');
         <?= number_format($totalRows) ?> record<?= $totalRows !== 1 ? 's' : '' ?>
       </span>
     </form>
+    </div>
 
+    <div class="card-body p-0">
     <?php if (empty($transfers)): ?>
       <div class="alert alert-info mb-0">No credit transfer records found.</div>
     <?php else: ?>
       <div class="table-responsive">
-        <table class="table table-hover table-bordered tbl-sm mb-2">
-          <thead class="table-dark">
+        <table class="table table-hover table-custom align-middle mb-0">
+          <thead>
             <tr>
               <th>#</th>
               <th>Ref Code</th>
@@ -335,9 +347,12 @@ admin_header('credit_transfer_logs', 'Credit Transfer Audit Logs');
       <?php endif; ?>
     <?php endif; ?>
 
-  </div><!-- /.ctl-card -->
+    </div><!-- /.card-body -->
+  </div><!-- /.card -->
 
-</div><!-- /.container-fluid -->
+</main>
 
-<?php admin_footer(); ?>
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
 
