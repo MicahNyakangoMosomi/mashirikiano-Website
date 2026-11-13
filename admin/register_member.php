@@ -94,12 +94,12 @@ function e($value): string
             <input class="form-control" id="email" name="email" type="email">
           </div>
           <?php foreach (['DateOfBirth'=>'Date of Birth','Gender'=>'Gender','Nationality'=>'Nationality','MaritalStatus'=>'Marital Status','PostalAddress'=>'Postal Address','PhysicalAddress'=>'Physical Address'] as $field => $label): ?>
-            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','MonthlyContribution','InitialShareCapital','RegistrationFee','NomineeAllocation'],true) ? 'type="number" step="0.01"' : '') ?>></div>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : '' ?>></div>
           <?php endforeach; ?>
           </div></fieldset>
-          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Occupation &amp; Contributions</legend><div class="row g-3">
-          <?php foreach (['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','MonthlyContribution'=>'Monthly Contribution','RemittanceMode'=>'Remittance Mode','InitialShareCapital'=>'Initial Share Capital','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date','Branch'=>'Branch'] as $field => $label): ?>
-            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','MonthlyContribution','InitialShareCapital','RegistrationFee'],true) ? 'type="number" step="0.01"' : '') ?>></div>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Occupation &amp; Income</legend><div class="row g-3">
+          <?php foreach (['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date','Branch'=>'Branch'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','RegistrationFee'],true) ? 'type="number" step="0.01"' : '') ?>></div>
           <?php endforeach; ?>
           </div></fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend><div class="row g-3">

@@ -37,13 +37,13 @@ class MemberService
             $stmt = $pdo->prepare(
                 'INSERT INTO members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Password, Status,
                  DateOfBirth, Gender, Nationality, MaritalStatus, PostalAddress, PhysicalAddress, Profession, Industry,
-                 EmployerName, StaffPayrollNumber, EmploymentPosition, GrossMonthlyIncome, BusinessDetails, MonthlyContribution,
-                 RemittanceMode, InitialShareCapital, RegistrationFee, JoiningDate, Branch, NomineeName, NomineeNationalID,
+                 EmployerName, StaffPayrollNumber, EmploymentPosition, GrossMonthlyIncome, BusinessDetails,
+                 RegistrationFee, JoiningDate, Branch, NomineeName, NomineeNationalID,
                  NomineeDateOfBirth, NomineeRelationship, NomineePhone, NomineeAllocation)
                  VALUES (:member_id, :national_id, :first_name, :last_name, :phone, :email, :password, :status,
                  :DateOfBirth, :Gender, :Nationality, :MaritalStatus, :PostalAddress, :PhysicalAddress, :Profession, :Industry,
-                 :EmployerName, :StaffPayrollNumber, :EmploymentPosition, :GrossMonthlyIncome, :BusinessDetails, :MonthlyContribution,
-                 :RemittanceMode, :InitialShareCapital, :RegistrationFee, :JoiningDate, :Branch, :NomineeName, :NomineeNationalID,
+                 :EmployerName, :StaffPayrollNumber, :EmploymentPosition, :GrossMonthlyIncome, :BusinessDetails,
+                 :RegistrationFee, :JoiningDate, :Branch, :NomineeName, :NomineeNationalID,
                  :NomineeDateOfBirth, :NomineeRelationship, :NomineePhone, :NomineeAllocation)'
             );
             $stmt->execute([
@@ -185,7 +185,7 @@ class MemberService
 
     private static function profileValues(array $data): array
     {
-        $columns = ['DateOfBirth','Gender','Nationality','MaritalStatus','PostalAddress','PhysicalAddress','Profession','Industry','EmployerName','StaffPayrollNumber','EmploymentPosition','GrossMonthlyIncome','BusinessDetails','MonthlyContribution','RemittanceMode','InitialShareCapital','RegistrationFee','JoiningDate','Branch','NomineeName','NomineeNationalID','NomineeDateOfBirth','NomineeRelationship','NomineePhone','NomineeAllocation'];
+        $columns = ['DateOfBirth','Gender','Nationality','MaritalStatus','PostalAddress','PhysicalAddress','Profession','Industry','EmployerName','StaffPayrollNumber','EmploymentPosition','GrossMonthlyIncome','BusinessDetails','RegistrationFee','JoiningDate','Branch','NomineeName','NomineeNationalID','NomineeDateOfBirth','NomineeRelationship','NomineePhone','NomineeAllocation'];
         $values = [];
         foreach ($columns as $column) $values[$column] = trim((string)($data[$column] ?? '')) ?: null;
         return $values;

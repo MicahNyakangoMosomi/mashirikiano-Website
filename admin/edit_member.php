@@ -86,6 +86,7 @@ function e($value): string
         <h1 class="h4 fw-bold mb-1">Edit <?= e($member['MemberID']) ?></h1>
         <p class="text-muted mb-4">Modify the member's details and save changes to the database.</p>
         <form method="post" enctype="multipart/form-data" class="row g-3" onsubmit="return confirm('Save these member changes to the database?');">
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Personal Info</legend><div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">MemberID</label>
             <input class="form-control" value="<?= e($member['MemberID']) ?>" disabled>
@@ -114,12 +115,25 @@ function e($value): string
             <label class="form-label">Email</label>
             <input class="form-control" name="email" type="email" value="<?= e($member['Email']) ?>">
           </div>
-          <?php foreach (['DateOfBirth'=>'Date of Birth','Gender'=>'Gender','Nationality'=>'Nationality','MaritalStatus'=>'Marital Status','PostalAddress'=>'Postal Address','PhysicalAddress'=>'Physical Address','Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','MonthlyContribution'=>'Monthly Contribution','RemittanceMode'=>'Remittance Mode','InitialShareCapital'=>'Initial Share Capital','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date','Branch'=>'Branch','NomineeName'=>'Nominee Name','NomineeNationalID'=>'Nominee National ID','NomineeDateOfBirth'=>'Nominee Date of Birth','NomineeRelationship'=>'Nominee Relationship','NomineePhone'=>'Nominee Phone','NomineeAllocation'=>'Nominee Allocation (%)'] as $field => $label): ?>
-            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= e($member[$field] ?? '') ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','MonthlyContribution','InitialShareCapital','RegistrationFee','NomineeAllocation'],true) ? 'type="number" step="0.01"' : '') ?>></div>
+          <?php foreach (['DateOfBirth'=>'Date of Birth','Gender'=>'Gender','Nationality'=>'Nationality','MaritalStatus'=>'Marital Status','PostalAddress'=>'Postal Address','PhysicalAddress'=>'Physical Address'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= e($member[$field] ?? '') ?>" <?= str_contains($field,'Date') ? 'type="date"' : '' ?>></div>
           <?php endforeach; ?>
+          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Occupation &amp; Income</legend><div class="row g-3">
+          <?php foreach (['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date','Branch'=>'Branch'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= e($member[$field] ?? '') ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','RegistrationFee'],true) ? 'type="number" step="0.01"' : '') ?>></div>
+          <?php endforeach; ?>
+          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend><div class="row g-3">
+          <?php foreach (['NomineeName'=>'Full Name','NomineeNationalID'=>'National ID','NomineeDateOfBirth'=>'Date of Birth','NomineeRelationship'=>'Relationship','NomineePhone'=>'Phone','NomineeAllocation'=>'Allocation (%)'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= e($member[$field] ?? '') ?>" <?= str_contains($field,'Date') ? 'type="date"' : (str_contains($field,'Allocation') ? 'type="number" step="0.01"' : '') ?>></div>
+          <?php endforeach; ?>
+          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">File Uploads</legend><div class="row g-3">
           <?php foreach ([['national_id_file','NationalIDDocument','National ID/Passport/Alien ID PDF','application/pdf'],['kra_file','KRADocument','KRA certificate PDF','application/pdf'],['passport_photo_file','PassportPhoto','Passport photo','image/*'],['membership_form_file','MembershipForm','Signed membership form PDF','application/pdf']] as [$field,$column,$label,$accept]): ?>
             <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><?php if (!empty($member[$column])): ?><div class="small mb-1"><a href="../<?= e($member[$column]) ?>" target="_blank" rel="noopener">View current document</a></div><?php endif; ?><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= e($accept) ?>"></div>
           <?php endforeach; ?>
+          </div></fieldset>
           
           <?php if ($isAdmin): ?>
             <div class="col-md-6">
