@@ -233,6 +233,41 @@ class MemberService
         }
     }
 
+    public static function deleteDocument(string $memberId, string $type): void
+    {
+        $documents = [
+            'id' => ['NationalIDDocument', 'nationalID'],
+            'kra' => ['KRADocument', 'KRA'],
+            'photo' => ['PassportPhoto', 'passportPhoto'],
+            'form' => ['MembershipForm', 'membership_form'],
+        ];
+        if (!isset($documents[$type])) {
+            throw new InvalidArgumentException('Invalid document type.');
+        }
+
+        [$column, $folder] = $documents[$type];
+        $pdo = Database::connection();
+        $stmt = $pdo->prepare("SELECT {$column} FROM members WHERE MemberID = :member_id LIMIT 1");
+        $stmt->execute([':member_id' => $memberId]);
+        $relativePath = (string)($stmt->fetchColumn() ?: '');
+        $expectedPrefix = 'member_documents/' . $folder . '/';
+
+        if ($relativePath !== '' && !str_starts_with($relativePath, $expectedPrefix)) {
+            throw new RuntimeException('Stored document path is invalid.');
+        }
+
+        if ($relativePath !== '') {
+            $storageRoot = realpath(dirname(__DIR__) . '/member_documents');
+            $filePath = realpath(dirname(__DIR__) . '/' . $relativePath);
+            if ($filePath !== false && $storageRoot !== false && str_starts_with($filePath, $storageRoot . DIRECTORY_SEPARATOR) && is_file($filePath) && !unlink($filePath)) {
+                throw new RuntimeException('Unable to remove the document file from the server.');
+            }
+        }
+
+        $clear = $pdo->prepare("UPDATE members SET {$column} = NULL WHERE MemberID = :member_id");
+        $clear->execute([':member_id' => $memberId]);
+    }
+
     public static function generateMemberId(string $nationalId, string $firstName, string $lastName): string
     {
         $nationalPrefix = substr(preg_replace('/\D+/', '', $nationalId), 0, 4);

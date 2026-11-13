@@ -28,6 +28,13 @@ if (isset($_SESSION['flash_message'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        if (!empty($_POST['remove_document'])) {
+            MemberService::deleteDocument($memberId, (string)$_POST['remove_document']);
+            $_SESSION['flash_message'] = 'Member document removed.';
+            $_SESSION['flash_message_type'] = 'success';
+            header('Location: edit_member.php?id=' . urlencode($memberId));
+            exit;
+        }
         MemberService::update($memberId, $_POST, [
             'can_change_status' => $isAdmin,
             'can_change_password' => $isAdmin,
@@ -86,7 +93,8 @@ function e($value): string
       <div class="card-body">
         <h1 class="h4 fw-bold mb-1">Edit <?= e($member['MemberID']) ?></h1>
         <p class="text-muted mb-4">Modify the member's details and save changes to the database.</p>
-        <form method="post" enctype="multipart/form-data" class="row g-3" onsubmit="return confirm('Save these member changes to the database?');">
+        <form method="post" enctype="multipart/form-data" class="row g-3" id="editMemberForm" onsubmit="return confirm('Save these member changes to the database?');">
+          <input type="hidden" name="remove_document" id="removeDocumentType" value="">
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Personal Info</legend><div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">MemberID</label>
@@ -132,7 +140,7 @@ function e($value): string
           </div></fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">File Uploads</legend><div class="row g-3">
           <?php foreach ([['national_id_file','NationalIDDocument','id','National ID/Passport/Alien ID PDF','application/pdf'],['kra_file','KRADocument','kra','KRA certificate PDF','application/pdf'],['passport_photo_file','PassportPhoto','photo','Passport photo','image/*'],['membership_form_file','MembershipForm','form','Signed membership form PDF','application/pdf']] as [$field,$column,$type,$label,$accept]): ?>
-            <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><?php if (!empty($member[$column])): ?><div class="small mb-1"><button class="btn btn-link btn-sm p-0 document-preview-trigger" type="button" data-document-url="member_document.php?id=<?= urlencode($member['MemberID']) ?>&amp;type=<?= e($type) ?>" data-document-name="<?= e($label) ?>">View current document</button></div><?php endif; ?><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= e($accept) ?>"></div>
+            <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><?php if (!empty($member[$column])): ?><div class="small mb-1 d-flex gap-3"><button class="btn btn-link btn-sm p-0 document-preview-trigger" type="button" data-document-url="member_document.php?id=<?= urlencode($member['MemberID']) ?>&amp;type=<?= e($type) ?>" data-document-name="<?= e($label) ?>">View current document</button><button class="btn btn-link btn-sm p-0 text-danger remove-document-trigger" type="button" data-document-type="<?= e($type) ?>">Remove file</button></div><?php endif; ?><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= e($accept) ?>"></div>
           <?php endforeach; ?>
           </div></fieldset>
           
@@ -193,6 +201,14 @@ function e($value): string
         documentPreviewFrame.src = button.dataset.documentUrl;
         documentPreviewTitle.textContent = button.dataset.documentName;
         bootstrap.Modal.getOrCreateInstance(documentPreviewModal).show();
+      });
+    });
+
+    document.querySelectorAll('.remove-document-trigger').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (!window.confirm('Remove this file from the server and clear its saved path?')) return;
+        document.getElementById('removeDocumentType').value = button.dataset.documentType;
+        document.getElementById('editMemberForm').submit();
       });
     });
 
