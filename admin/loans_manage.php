@@ -185,11 +185,11 @@ if ($viewLoanId > 0) {
         <form method="post" action="loans_manage" onsubmit="return confirm('Run daily interest accrual catch-up and check for arrears on all active loans?');">
           <input type="hidden" name="action" value="run_eod_batch">
           <button type="submit" class="btn btn-outline-secondary fw-semibold">
-            <i class="bi bi-clock-history me-1"></i> Run EOD Batch
+            Run EOD Batch
           </button>
         </form>
         <a href="loans_create" class="btn btn-primary fw-semibold">
-          <i class="bi bi-plus-circle me-1"></i> New Product
+          New Product
         </a>
       </div>
     </div>
@@ -197,7 +197,6 @@ if ($viewLoanId > 0) {
     <!-- Flash Message -->
     <?php if ($message): ?>
       <div class="alert alert-<?= admin_e($messageType) ?> alert-dismissible fade show shadow-sm" role="alert">
-        <i class="bi <?= $messageType === 'success' ? 'bi-check-circle-fill' : ($messageType === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill') ?> me-2"></i>
         <?= admin_e($message) ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
@@ -242,10 +241,10 @@ if ($viewLoanId > 0) {
                 <input type="text" name="search" class="form-control"
                        placeholder="Search by name, ID, or 5-char code"
                        value="<?= admin_e($search) ?>">
-                <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                <button class="btn btn-outline-primary" type="submit">Search</button>
                 <?php if ($search !== ''): ?>
                   <a href="loans_manage?tab=<?= admin_e($activeTab) ?>" class="btn btn-outline-secondary" title="Clear">
-                    <i class="bi bi-x-circle"></i>
+                    Clear
                   </a>
                 <?php endif; ?>
               </div>
@@ -260,7 +259,6 @@ if ($viewLoanId > 0) {
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white py-3 border-bottom">
           <h2 class="h5 fw-bold text-dark mb-0">
-            <i class="bi bi-table text-primary me-2"></i>
             <?php
               $tabHeaders = ['all' => 'All Loans', 'active' => 'Active Loans', 'in_arrears' => 'In Arrears', 'closed' => 'Closed Loans'];
               echo admin_e($tabHeaders[$activeTab] ?? 'Loans');
@@ -301,7 +299,7 @@ if ($viewLoanId > 0) {
                     <td>
                       <div class="fw-semibold text-primary"><?= admin_e($row['loanType']) ?></div>
                       <span class="account-badge mt-1 d-inline-block">
-                        <i class="bi bi-phone me-1"></i><?= admin_e($row['repayment_account']) ?>
+                        <?= admin_e($row['repayment_account']) ?>
                       </span>
                     </td>
                     <td>
@@ -331,12 +329,12 @@ if ($viewLoanId > 0) {
                           <input type="hidden" name="action" value="refresh_accrual">
                           <input type="hidden" name="active_loan_id" value="<?= (int)$row['activeLoanID'] ?>">
                           <button type="submit" class="btn btn-outline-info" title="Recalculate daily interest accrual">
-                            <i class="bi bi-arrow-repeat"></i>
+                            Refresh
                           </button>
                         </form>
                         <a href="loans_manage?tab=<?= admin_e($activeTab) ?>&view_ledger=<?= (int)$row['activeLoanID'] ?>"
                            class="btn btn-outline-primary fw-semibold">
-                          <i class="bi bi-journal-text me-1"></i> Ledger
+                          Ledger
                         </a>
                       </div>
                     </td>
@@ -345,7 +343,6 @@ if ($viewLoanId > 0) {
                 <?php if (empty($activeLoans)): ?>
                   <tr>
                     <td colspan="8" class="text-center py-5 text-muted">
-                      <i class="bi bi-folder-x fs-1 d-block text-secondary mb-2"></i>
                       No member loans found matching this filter criteria.
                     </td>
                   </tr>
@@ -361,7 +358,7 @@ if ($viewLoanId > 0) {
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white py-3 border-bottom">
           <h2 class="h5 fw-bold text-dark mb-0">
-            <i class="bi bi-hourglass-split text-warning me-2"></i> Loan Applications Approval Queue
+            Loan Applications Approval Queue
           </h2>
         </div>
         <div class="card-body p-0">
@@ -405,7 +402,7 @@ if ($viewLoanId > 0) {
                           <input type="hidden" name="action" value="approve_application">
                           <input type="hidden" name="application_id" value="<?= (int)$app['loanApplicationID'] ?>">
                           <button type="submit" class="btn btn-sm btn-success fw-bold">
-                            <i class="bi bi-check-lg me-1"></i> Approve
+                            Approve
                           </button>
                         </form>
 
@@ -413,7 +410,7 @@ if ($viewLoanId > 0) {
                         <button type="button" class="btn btn-sm btn-outline-danger fw-bold"
                                 data-bs-toggle="modal"
                                 data-bs-target="#rejectModal<?= (int)$app['loanApplicationID'] ?>">
-                          <i class="bi bi-x-lg me-1"></i> Reject
+                          Reject
                         </button>
                       </div>
 
@@ -427,7 +424,7 @@ if ($viewLoanId > 0) {
                               <input type="hidden" name="application_id" value="<?= (int)$app['loanApplicationID'] ?>">
                               <div class="modal-header bg-danger text-white">
                                 <h5 class="modal-title fw-bold">
-                                  <i class="bi bi-x-octagon me-2"></i>Reject Application #<?= (int)$app['loanApplicationID'] ?>
+                                  Reject Application #<?= (int)$app['loanApplicationID'] ?>
                                 </h5>
                                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                               </div>
@@ -441,13 +438,13 @@ if ($viewLoanId > 0) {
                                     placeholder="e.g. Savings threshold insufficient, ongoing facility past due, incomplete documentation..."></textarea>
                                 </div>
                                 <div class="alert alert-warning py-2 small mb-0">
-                                  <i class="bi bi-info-circle me-1"></i>An SMS notification will be dispatched to the member upon confirmation.
+                                  An SMS notification will be dispatched to the member upon confirmation.
                                 </div>
                               </div>
                               <div class="modal-footer bg-light">
                                 <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Cancel</button>
                                 <button type="submit" class="btn btn-danger fw-bold px-4">
-                                  <i class="bi bi-x-circle me-1"></i>Confirm Rejection
+                                  Confirm Rejection
                                 </button>
                               </div>
                             </form>
@@ -460,7 +457,6 @@ if ($viewLoanId > 0) {
                 <?php if (empty($pendingApplications)): ?>
                   <tr>
                     <td colspan="7" class="text-center py-5 text-muted">
-                      <i class="bi bi-check2-circle fs-1 d-block text-success mb-2"></i>
                       All caught up! No pending loan applications waiting for review.
                     </td>
                   </tr>
@@ -476,11 +472,11 @@ if ($viewLoanId > 0) {
     <div class="card border-0 shadow-sm bg-white p-4 mt-4">
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div>
-          <h3 class="h6 fw-bold mb-1 text-dark"><i class="bi bi-graph-up text-success me-2"></i>Need the full executive analytics view?</h3>
+          <h3 class="h6 fw-bold mb-1 text-dark">Need the full executive analytics view?</h3>
           <p class="text-muted small mb-0">View KPI summary cards, liquidity trend charts, PAR rate, and product performance analytics in Loan Portfolio.</p>
         </div>
         <a href="loans_portfolio" class="btn btn-outline-success fw-semibold px-4 shadow-sm">
-          <i class="bi bi-pie-chart me-1"></i> Open Loan Portfolio
+          Open Loan Portfolio
         </a>
       </div>
     </div>
@@ -494,7 +490,7 @@ if ($viewLoanId > 0) {
         <div class="modal-content border-0 shadow-lg">
           <div class="modal-header bg-primary text-white">
             <h5 class="modal-title fw-bold">
-              <i class="bi bi-journal-check me-2"></i> Loan Audit Trail &amp; Repayment Ledger (Active Loan #<?= $viewLoanId ?>)
+              Loan Audit Trail &amp; Repayment Ledger (Active Loan #<?= $viewLoanId ?>)
             </h5>
             <a href="loans_manage?tab=<?= admin_e($activeTab) ?>" class="btn-close btn-close-white"></a>
           </div>

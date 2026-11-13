@@ -226,10 +226,10 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
       </div>
       <div class="d-flex gap-2">
         <a href="loans_manage" class="btn btn-outline-primary fw-semibold">
-          <i class="bi bi-list-check me-1"></i> Monitor Loans
+          Monitor Loans
         </a>
         <a href="loans_portfolio" class="btn btn-outline-success fw-semibold">
-          <i class="bi bi-graph-up me-1"></i> Loan Portfolio
+          Loan Portfolio
         </a>
       </div>
     </div>
@@ -237,7 +237,6 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
     <!-- Flash Message -->
     <?php if ($message): ?>
       <div class="alert alert-<?= admin_e($messageType) ?> alert-dismissible fade show shadow-sm" role="alert">
-        <i class="bi <?= $messageType === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' ?> me-2"></i>
         <?= admin_e($message) ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
@@ -249,7 +248,7 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white py-3 border-bottom">
             <h2 class="h5 fw-bold text-dark mb-0">
-              <i class="bi bi-plus-circle text-primary me-2"></i>New Loan Product
+              New Loan Product
             </h2>
           </div>
           <div class="card-body p-4">
@@ -348,7 +347,7 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
               </div>
 
               <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
-                <i class="bi bi-check2-circle me-1"></i> Save Loan Product
+                Save Loan Product
               </button>
             </form>
           </div>
@@ -360,7 +359,7 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between border-bottom">
             <h2 class="h5 fw-bold text-dark mb-0">
-              <i class="bi bi-database-check text-primary me-2"></i>Loans Present in Database
+              Loans Present in Database
             </h2>
             <span class="badge bg-primary px-3 py-2"><?= count($products) ?> Product<?= count($products) === 1 ? '' : 's' ?></span>
           </div>
@@ -396,7 +395,7 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
                           <?= admin_e($p['loanDescription'] ?: 'No description provided') ?>
                         </small>
                         <span class="badge <?= $isCustomPeriod ? 'bg-info text-dark' : 'bg-light text-secondary border' ?> mt-1" style="font-size:0.7rem;">
-                          <i class="bi bi-calendar-event me-1"></i><?= admin_e($p['paymentPeriod']) ?>
+                          <?= admin_e($p['paymentPeriod']) ?>
                         </span>
                       </td>
                       <td class="fw-bold text-success text-nowrap">
@@ -421,17 +420,17 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
                         </span>
                       </td>
                       <td class="text-end pe-3 text-nowrap">
-                        <button type="button" class="btn btn-sm btn-outline-primary me-1" 
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 fw-semibold" 
                                 data-bs-toggle="modal" data-bs-target="#editLoanModal<?= $pId ?>" 
                                 title="Edit Product">
-                          <i class="bi bi-pencil"></i>
+                          Edit
                         </button>
                         <form method="post" action="loans_create" class="d-inline"
                               onsubmit="return confirm('Are you sure you want to permanently delete \'<?= admin_e(addslashes($p['loanType'])) ?>\' (#<?= $pId ?>) from the database?');">
                           <input type="hidden" name="delete_loan_product" value="1">
                           <input type="hidden" name="loan_id" value="<?= $pId ?>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Product">
-                            <i class="bi bi-trash"></i>
+                          <button type="submit" class="btn btn-sm btn-outline-danger fw-semibold" title="Delete Product">
+                            Delete
                           </button>
                         </form>
                       </td>
@@ -447,7 +446,7 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
 
                             <div class="modal-header bg-primary text-white">
                               <h5 class="modal-title fw-bold" id="editLoanModalLabel<?= $pId ?>">
-                                <i class="bi bi-pencil-square me-2"></i>Edit Loan Product #<?= $pId ?>
+                                Edit Loan Product #<?= $pId ?>
                               </h5>
                               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
@@ -535,7 +534,6 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
                   <?php if (empty($products)): ?>
                     <tr>
                       <td colspan="6" class="text-center py-5 text-muted">
-                        <i class="bi bi-database-x fs-1 d-block mb-2 text-secondary"></i>
                         <h6 class="fw-bold text-dark">No loan products found in database</h6>
                         <p class="small text-muted mb-0">Use the form on the left to configure a new loan facility.</p>
                       </td>

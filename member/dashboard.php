@@ -480,13 +480,10 @@ function dashboardUrl(array $params): string
           </div>
           <div class="col-md-6">
             <div class="card metric h-100">
-              <div class="card-body d-flex align-items-center gap-3">
-                <span class="metric-icon danger"><i class="bi bi-cash-stack"></i></span>
-                <div>
-                  <div class="text-muted small text-uppercase fw-bold">Active Total Loan Balance</div>
-                  <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalLoanBalance, 2) ?></div>
-                  <div class="small text-muted" style="font-size:0.75rem;">Outstanding principal & daily accrued interest</div>
-                </div>
+              <div class="card-body">
+                <div class="text-muted small text-uppercase fw-bold">Active Total Loan Balance</div>
+                <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalLoanBalance, 2) ?></div>
+                <div class="small text-muted" style="font-size:0.75rem;">Outstanding principal & daily accrued interest</div>
               </div>
             </div>
           </div>
@@ -539,22 +536,19 @@ function dashboardUrl(array $params): string
           </div>
           <div class="d-flex gap-2">
             <a class="btn btn-outline-success btn-sm fw-semibold" href="?tab=progress">
-              <i class="bi bi-clock-history me-1"></i> Loan Progress
+              Loan Progress
             </a>
             <a class="btn btn-outline-primary btn-sm fw-semibold" href="?tab=active">
-              <i class="bi bi-cash-coin me-1"></i> Active Loans
+              Active Loans
             </a>
           </div>
         </div>
 
         <!-- Wallet Qualification Info Strip -->
         <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 p-3 rounded-3">
-          <div class="d-flex align-items-center gap-3">
-            <span class="fs-4 text-success"><i class="bi bi-shield-check"></i></span>
-            <div>
-              <div class="fw-bold text-dark">Your Current Savings Balances</div>
-              <div class="small text-muted">Akiba: <strong>KES <?= number_format($akibaWallet, 2) ?></strong> &middot; Ushirika Shares: <strong>KES <?= number_format($totalUshirika, 2) ?></strong></div>
-            </div>
+          <div>
+            <div class="fw-bold text-dark">Your Current Savings Balances</div>
+            <div class="small text-muted">Akiba: <strong>KES <?= number_format($akibaWallet, 2) ?></strong> &middot; Ushirika Shares: <strong>KES <?= number_format($totalUshirika, 2) ?></strong></div>
           </div>
           <span class="badge bg-primary px-3 py-2">Real-Time Qualification</span>
         </div>
@@ -582,11 +576,11 @@ function dashboardUrl(array $params): string
                     </h5>
                     <?php if ($isEligible): ?>
                       <span class="badge bg-success" style="font-size: 0.75rem;">
-                        <i class="bi bi-check-circle-fill me-1"></i> Eligible
+                        Eligible
                       </span>
                     <?php else: ?>
                       <span class="badge bg-danger" style="font-size: 0.75rem;">
-                        <i class="bi bi-x-circle-fill me-1"></i> Under-Qualified
+                        Under-Qualified
                       </span>
                     <?php endif; ?>
                   </div>
@@ -618,7 +612,7 @@ function dashboardUrl(array $params): string
 
                   <?php if (!$isEligible): ?>
                     <div class="alert alert-warning py-1 px-2 small mb-3 text-center" style="font-size: 0.75rem;">
-                      <i class="bi bi-exclamation-triangle me-1"></i> <?= e($elig['reason']) ?>
+                      <?= e($elig['reason']) ?>
                     </div>
                   <?php endif; ?>
 
@@ -654,7 +648,7 @@ function dashboardUrl(array $params): string
 
                 <div class="modal-header bg-success text-white border-0">
                   <h5 class="modal-title fw-bold" id="applyLoanModalLabel">
-                    <i class="bi bi-file-earmark-text me-1"></i> Member Loan Application
+                    Member Loan Application
                   </h5>
                   <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -689,7 +683,7 @@ function dashboardUrl(array $params): string
                   </div>
 
                   <div class="alert alert-info small py-2 mb-0">
-                    <i class="bi bi-bell me-1"></i> A confirmation SMS will be dispatched to your phone <strong><?= e($member['PrimaryNumber']) ?></strong> upon submission and review.
+                    A confirmation SMS will be dispatched to your phone <strong><?= e($member['PrimaryNumber']) ?></strong> upon submission and review.
                   </div>
                 </div>
 
@@ -713,7 +707,7 @@ function dashboardUrl(array $params): string
             <p class="text-muted small mb-0">Track real-time status transitions, review decisions, and admin remarks for your submitted loan requests.</p>
           </div>
           <a href="?tab=catalog" class="btn apply-btn fw-bold">
-            <i class="bi bi-plus-circle me-1"></i> Apply for a Loan
+            Apply for a Loan
           </a>
         </div>
 
@@ -748,7 +742,7 @@ function dashboardUrl(array $params): string
                   <div class="stepper-container">
                     <!-- Step 1: Submitted -->
                     <div class="stepper-step completed">
-                      <div class="stepper-badge"><i class="bi bi-check-lg"></i></div>
+                      <div class="stepper-badge">1</div>
                       <div class="stepper-label text-success">Submitted</div>
                       <small class="text-muted" style="font-size:0.7rem;"><?= date('d M Y', strtotime($app['createdAt'])) ?></small>
                     </div>
@@ -756,13 +750,7 @@ function dashboardUrl(array $params): string
                     <!-- Step 2: Under Review -->
                     <div class="stepper-step <?= ($isPending ? 'active' : ($isApproved ? 'completed' : 'rejected')) ?>">
                       <div class="stepper-badge">
-                        <?php if ($isPending): ?>
-                          <i class="bi bi-hourglass-split"></i>
-                        <?php elseif ($isApproved): ?>
-                          <i class="bi bi-check-lg"></i>
-                        <?php else: ?>
-                          <i class="bi bi-x-lg"></i>
-                        <?php endif; ?>
+                        <?= $isPending ? '2' : ($isApproved ? '2' : '&times;') ?>
                       </div>
                       <div class="stepper-label <?= $isPending ? 'text-warning fw-bold' : ($isApproved ? 'text-success' : 'text-danger') ?>">Under Review</div>
                       <small class="text-muted" style="font-size:0.7rem;"><?= $isPending ? 'In Progress' : 'Completed' ?></small>
@@ -771,13 +759,7 @@ function dashboardUrl(array $params): string
                     <!-- Step 3: Approved / Rejected -->
                     <div class="stepper-step <?= $isApproved ? 'completed' : ($isRejected ? 'rejected' : '') ?>">
                       <div class="stepper-badge">
-                        <?php if ($isApproved): ?>
-                          <i class="bi bi-check-lg"></i>
-                        <?php elseif ($isRejected): ?>
-                          <i class="bi bi-x-lg"></i>
-                        <?php else: ?>
-                          3
-                        <?php endif; ?>
+                        <?= $isApproved ? '3' : ($isRejected ? '&times;' : '3') ?>
                       </div>
                       <div class="stepper-label <?= $isApproved ? 'text-success fw-bold' : ($isRejected ? 'text-danger fw-bold' : 'text-muted') ?>">
                         <?= $isRejected ? 'Rejected' : 'Approved' ?>
@@ -791,7 +773,7 @@ function dashboardUrl(array $params): string
                   <!-- Rejection Feedback Alert -->
                   <?php if ($isRejected): ?>
                     <div class="alert alert-danger mb-0 mt-2 p-3">
-                      <div class="fw-bold mb-1"><i class="bi bi-exclamation-octagon me-1"></i> Application Not Approved</div>
+                      <div class="fw-bold mb-1">Application Not Approved</div>
                       <p class="mb-0 small"><strong>Reason from Admin:</strong> <?= e($app['rejection'] ?: 'Application does not meet required savings or risk thresholds.') ?></p>
                     </div>
                   <?php endif; ?>
@@ -800,11 +782,11 @@ function dashboardUrl(array $params): string
                   <?php if ($isApproved): ?>
                     <div class="alert alert-success d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0 mt-2 p-3">
                       <div>
-                        <div class="fw-bold"><i class="bi bi-check-circle me-1"></i> Approved & Active in Ledger</div>
+                        <div class="fw-bold">Approved &amp; Active in Ledger</div>
                         <div class="small">M-Pesa Repayment Account Code: <strong class="fs-6 text-primary"><?= e($app['repayment_account']) ?></strong></div>
                       </div>
                       <a href="?tab=active" class="btn btn-sm btn-success fw-bold">
-                        <i class="bi bi-eye me-1"></i> View Live Loan Dashboard
+                        View Live Loan Dashboard
                       </a>
                     </div>
                   <?php endif; ?>
@@ -815,7 +797,6 @@ function dashboardUrl(array $params): string
           </div>
         <?php else: ?>
           <div class="card metric p-5 text-center">
-            <i class="bi bi-file-earmark-text fs-1 text-muted mb-3"></i>
             <h5 class="fw-bold text-dark">No Loan Applications Found</h5>
             <p class="text-muted">You have not submitted any loan applications yet. Explore our loan products catalog to apply.</p>
             <div>
@@ -836,10 +817,10 @@ function dashboardUrl(array $params): string
           </div>
           <div class="d-flex gap-2">
             <a href="?tab=catalog" class="btn btn-outline-success btn-sm fw-semibold">
-              <i class="bi bi-plus-circle me-1"></i> Apply Another Loan
+              Apply Another Loan
             </a>
             <a href="?tab=ledger" class="btn btn-outline-primary btn-sm fw-semibold">
-              <i class="bi bi-journal-text me-1"></i> Repayment Ledger
+              Repayment Ledger
             </a>
           </div>
         </div>
@@ -870,8 +851,8 @@ function dashboardUrl(array $params): string
                     <form method="post" action="dashboard?tab=active" id="refreshForm_<?= $act['activeLoanID'] ?>" class="d-inline">
                       <input type="hidden" name="refresh_loan_state" value="1">
                       <input type="hidden" name="active_loan_id" value="<?= (int)$act['activeLoanID'] ?>">
-                      <button type="submit" class="btn btn-primary fw-bold shadow-sm" onclick="this.querySelector('i').classList.add('spin-anim');">
-                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh Loan State
+                      <button type="submit" class="btn btn-primary fw-bold shadow-sm">
+                        Refresh Loan State
                       </button>
                     </form>
                   </div>
@@ -881,7 +862,7 @@ function dashboardUrl(array $params): string
                     <div class="row g-3 align-items-center">
                       <div class="col-lg-7">
                         <div class="fw-bold text-success fs-6 mb-1">
-                          <i class="bi bi-phone me-1"></i> M-Pesa C2B Paybill Repayment Instructions
+                          M-Pesa C2B Paybill Repayment Instructions
                         </div>
                         <p class="small text-muted mb-2">
                           1. Open Safaricom M-Pesa &rarr; Lipa na M-Pesa &rarr; <strong>Paybill</strong><br>
@@ -894,7 +875,7 @@ function dashboardUrl(array $params): string
                           <div class="d-flex align-items-center gap-2">
                             <span class="account-code-display"><?= e($act['repayment_account']) ?></span>
                             <button type="button" class="btn btn-outline-success fw-bold" onclick="copyRepayCode('<?= e($act['repayment_account']) ?>')">
-                              <i class="bi bi-clipboard me-1"></i> Copy
+                              Copy
                             </button>
                           </div>
                           <small class="text-muted">Unique loan account code</small>
@@ -964,7 +945,7 @@ function dashboardUrl(array $params): string
                     <div>
                       <span>Last Interest Calculated: <strong><?= e($act['lastInterestCalcDate']) ?></strong></span> &middot;
                       <a href="?tab=ledger" class="remarks-link ms-2">
-                        <i class="bi bi-journal-text me-1"></i> View Repayment Ledger
+                        View Repayment Ledger
                       </a>
                     </div>
                   </div>
@@ -975,7 +956,6 @@ function dashboardUrl(array $params): string
           </div>
         <?php else: ?>
           <div class="card metric p-5 text-center">
-            <i class="bi bi-check2-circle fs-1 text-success mb-3"></i>
             <h5 class="fw-bold text-dark">No Active Loans</h5>
             <p class="text-muted">You do not have any active borrowing facilities at the moment. Need credit? Explore our catalog.</p>
             <div>
@@ -995,7 +975,7 @@ function dashboardUrl(array $params): string
             <p class="text-muted small mb-0">Immutable transaction history recording disbursements, daily interest accruals, repayments, and running balances.</p>
           </div>
           <a href="?tab=active" class="btn btn-outline-primary btn-sm fw-semibold">
-            <i class="bi bi-arrow-left me-1"></i> Active Loans
+            Active Loans
           </a>
         </div>
 
@@ -1036,7 +1016,6 @@ function dashboardUrl(array $params): string
                   <?php if (empty($memberLedger)): ?>
                     <tr>
                       <td colspan="5" class="text-center text-muted py-5">
-                        <i class="bi bi-journal-x fs-1 d-block text-secondary mb-2"></i>
                         No loan transaction events recorded yet.
                       </td>
                     </tr>
@@ -1143,12 +1122,12 @@ function dashboardUrl(array $params): string
     function copyRepayCode(code) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(code).then(() => {
-          alert('Copied repayment account code: ' + code);
+          console.log("Copyopied repayment account code" + code);
         }).catch(() => {
-          prompt('Copy repayment account code:', code);
+          console.log('Copy repayment account code:', code);
         });
       } else {
-        prompt('Copy repayment account code:', code);
+      console.log('Copy repayment account code:', code);
       }
     }
 

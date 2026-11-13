@@ -114,10 +114,10 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
       </div>
       <div class="d-flex gap-2">
         <a href="loans_manage" class="btn btn-outline-primary fw-semibold">
-          <i class="bi bi-list-check me-1"></i> Manage Loans
+          Manage Loans
         </a>
         <a href="loans_create" class="btn btn-primary fw-semibold">
-          <i class="bi bi-plus-circle me-1"></i> Configure Products
+          Configure Products
         </a>
       </div>
     </div>
@@ -130,9 +130,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
           <div>
             <div class="d-flex align-items-center justify-content-between mb-3">
               <span class="text-muted small fw-bold text-uppercase">Principal Disbursed</span>
-              <span class="kpi-icon bg-primary bg-opacity-10 text-primary">
-                <i class="bi bi-cash-stack"></i>
-              </span>
             </div>
             <div class="h3 fw-bold text-dark mb-1">
               KES <?= number_format($disbursedTotal, 2) ?>
@@ -150,9 +147,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
           <div>
             <div class="d-flex align-items-center justify-content-between mb-3">
               <span class="text-muted small fw-bold text-uppercase">Outstanding Principal</span>
-              <span class="kpi-icon bg-warning bg-opacity-10 text-warning">
-                <i class="bi bi-hourglass-split"></i>
-              </span>
             </div>
             <div class="h3 fw-bold text-dark mb-1">
               KES <?= number_format((float)$analytics['total_outstanding_principal'], 2) ?>
@@ -170,9 +164,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
           <div>
             <div class="d-flex align-items-center justify-content-between mb-3">
               <span class="text-muted small fw-bold text-uppercase">Total Cash Collected</span>
-              <span class="kpi-icon bg-success bg-opacity-10 text-success">
-                <i class="bi bi-arrow-repeat"></i>
-              </span>
             </div>
             <div class="h3 fw-bold text-success mb-1">
               KES <?= number_format($combinedReturn, 2) ?>
@@ -191,9 +182,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
           <div>
             <div class="d-flex align-items-center justify-content-between mb-3">
               <span class="text-muted small fw-bold text-uppercase">Portfolio at Risk (PAR)</span>
-              <span class="kpi-icon <?= $analytics['arrears_rate'] > 5 ? 'bg-danger bg-opacity-10 text-danger' : 'bg-success bg-opacity-10 text-success' ?>">
-                <i class="bi bi-shield-exclamation"></i>
-              </span>
             </div>
             <div class="h3 fw-bold <?= $analytics['arrears_rate'] > 5 ? 'text-danger' : 'text-success' ?> mb-1">
               <?= number_format($analytics['arrears_rate'], 2) ?>%
@@ -214,9 +202,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
             <div class="small text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">Active Borrowers</div>
             <div class="fs-5 fw-bold text-success"><?= (int)$analytics['status_distribution']['ACTIVE'] ?></div>
           </div>
-          <span class="badge bg-success bg-opacity-10 text-success fs-6 p-2 rounded-circle">
-            <i class="bi bi-person-check"></i>
-          </span>
         </div>
       </div>
       <div class="col-6 col-md-3">
@@ -225,9 +210,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
             <div class="small text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">In Arrears</div>
             <div class="fs-5 fw-bold text-danger"><?= (int)$analytics['status_distribution']['IN_ARREARS'] ?></div>
           </div>
-          <span class="badge bg-danger bg-opacity-10 text-danger fs-6 p-2 rounded-circle">
-            <i class="bi bi-exclamation-triangle"></i>
-          </span>
         </div>
       </div>
       <div class="col-6 col-md-3">
@@ -236,9 +218,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
             <div class="small text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">Fully Settled</div>
             <div class="fs-5 fw-bold text-secondary"><?= (int)$analytics['status_distribution']['CLOSED'] ?></div>
           </div>
-          <span class="badge bg-secondary bg-opacity-10 text-secondary fs-6 p-2 rounded-circle">
-            <i class="bi bi-check2-all"></i>
-          </span>
         </div>
       </div>
       <div class="col-6 col-md-3">
@@ -247,9 +226,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
             <div class="small text-muted text-uppercase fw-semibold" style="font-size:0.75rem;">Recovery Rate</div>
             <div class="fs-5 fw-bold text-primary"><?= number_format($recoveryRate, 1) ?>%</div>
           </div>
-          <span class="badge bg-primary bg-opacity-10 text-primary fs-6 p-2 rounded-circle">
-            <i class="bi bi-pie-chart"></i>
-          </span>
         </div>
       </div>
     </div>
@@ -260,7 +236,7 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
       <div class="col-lg-8">
         <div class="chart-card">
           <div class="chart-title">
-            <i class="bi bi-bar-chart-line text-primary"></i> Disbursements vs. Repayments (Liquidity Trend)
+            Disbursements vs. Repayments (Liquidity Trend)
           </div>
           <div class="small text-muted mb-3">Monthly comparison of disbursed credit volume versus cash repayments collected over the last 6 months.</div>
           <div style="position: relative; height: 320px;">
@@ -273,7 +249,7 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
       <div class="col-lg-4">
         <div class="chart-card">
           <div class="chart-title">
-            <i class="bi bi-pie-chart text-success"></i> Loan Status Distribution
+            Loan Status Distribution
           </div>
           <div class="small text-muted mb-3">Breakdown of operational portfolio states.</div>
           <div style="position: relative; height: 240px;">
@@ -303,7 +279,7 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
       <div class="col-lg-7">
         <div class="chart-card">
           <div class="chart-title">
-            <i class="bi bi-hdd-stack text-warning"></i> Borrowing Volume by Loan Facility
+            Borrowing Volume by Loan Facility
           </div>
           <div class="small text-muted mb-3">Compares borrower volume and capital concentration across individual loan types.</div>
           <div style="position: relative; height: 290px;">
@@ -316,7 +292,7 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
       <div class="col-lg-5">
         <div class="chart-card">
           <div class="chart-title">
-            <i class="bi bi-table text-primary"></i> Facility Allocation Breakdown
+            Facility Allocation Breakdown
           </div>
           <div class="small text-muted mb-3">Live distribution by loan product.</div>
           <div class="table-responsive">
@@ -352,7 +328,6 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
                 <?php else: ?>
                   <tr>
                     <td colspan="4" class="text-center py-4 text-muted">
-                      <i class="bi bi-inbox fs-3 d-block mb-1 text-secondary"></i>
                       No active loans disbursed yet.
                     </td>
                   </tr>
