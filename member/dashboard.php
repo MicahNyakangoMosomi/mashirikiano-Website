@@ -885,8 +885,8 @@ function dashboardUrl(array $params): string
                         </div>
                         <p class="small text-muted mb-2">
                           1. Open Safaricom M-Pesa &rarr; Lipa na M-Pesa &rarr; <strong>Paybill</strong><br>
-                          2. Business Number: <strong><?= e(env('MPESA_SHORTCODE', '4085444')) ?></strong><br>
-                          3. Account Number: Enter your unique 5-character routing code below:
+                          2. Business Number: <strong><?= e(env('MPESA_SHORTCODE', '4048759')) ?></strong><br>
+                          3. Account Number: <strong class="text-primary font-monospace fs-6"><?= e($act['repayment_account']) ?></strong>
                         </p>
                       </div>
                       <div class="col-lg-5 text-lg-end">
