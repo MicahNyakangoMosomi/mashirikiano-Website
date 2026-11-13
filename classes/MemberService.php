@@ -15,6 +15,7 @@ class MemberService
         $nationalId = self::cleanNationalId($data['national_id'] ?? $data['NationalID'] ?? '');
         $phone = self::cleanPhone($data['phone'] ?? $data['PrimaryNumber'] ?? '');
         $email = self::cleanEmail($data['email'] ?? $data['Email'] ?? '');
+        $profile = self::profileValues($data);
         $password = self::generatePassword();
         $depositPaid = self::boolValue($data['deposit_paid'] ?? false);
 
@@ -34,8 +35,16 @@ class MemberService
         $pdo->beginTransaction();
         try {
             $stmt = $pdo->prepare(
-                'INSERT INTO members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Password, Status)
-                 VALUES (:member_id, :national_id, :first_name, :last_name, :phone, :email, :password, :status)'
+                'INSERT INTO members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Password, Status,
+                 DateOfBirth, Gender, Nationality, MaritalStatus, PostalAddress, PhysicalAddress, Profession, Industry,
+                 EmployerName, StaffPayrollNumber, EmploymentPosition, GrossMonthlyIncome, BusinessDetails, MonthlyContribution,
+                 RemittanceMode, InitialShareCapital, RegistrationFee, JoiningDate, Branch, NomineeName, NomineeNationalID,
+                 NomineeDateOfBirth, NomineeRelationship, NomineePhone, NomineeAllocation)
+                 VALUES (:member_id, :national_id, :first_name, :last_name, :phone, :email, :password, :status,
+                 :DateOfBirth, :Gender, :Nationality, :MaritalStatus, :PostalAddress, :PhysicalAddress, :Profession, :Industry,
+                 :EmployerName, :StaffPayrollNumber, :EmploymentPosition, :GrossMonthlyIncome, :BusinessDetails, :MonthlyContribution,
+                 :RemittanceMode, :InitialShareCapital, :RegistrationFee, :JoiningDate, :Branch, :NomineeName, :NomineeNationalID,
+                 :NomineeDateOfBirth, :NomineeRelationship, :NomineePhone, :NomineeAllocation)'
             );
             $stmt->execute([
                 ':member_id' => $memberId,
@@ -46,7 +55,7 @@ class MemberService
                 ':email' => $email ?: null,
                 ':password' => $passwordHash,
                 ':status' => $status,
-            ]);
+            ] + $profile);
 
             $depositStmt = $pdo->prepare(
                 'INSERT INTO deposits (MemberID, RequiredAmount, PaidAmount, Balance, Status)
@@ -85,6 +94,8 @@ class MemberService
             throw $error;
         }
 
+        self::saveDocuments($memberId, $_FILES ?? [], $pdo);
+
         if ($status === 'Active') {
             $fullName = trim($firstName . ' ' . $lastName);
             $smsMessage = "Dear {$fullName}, Thank you for joining Mashirikiano Sacco. You have been successfully registered. Your Membership ID is {$memberId} and your password is {$password}. Use your membershipid and the password as your login. Login url:https://mashirikianosacco.co.ke/auth/login.php Keep saving to qualify for loans of up to 3 times your savings. For support contact: itsupport@mashirikianosacco.co.ke or call 0758500557";
@@ -112,6 +123,7 @@ class MemberService
         $nationalId = self::cleanNationalId($data['national_id'] ?? '');
         $phone = self::cleanPhone($data['phone'] ?? '');
         $email = self::cleanEmail($data['email'] ?? '');
+        $profile = self::profileValues($data);
         $status = trim((string)($data['status'] ?? ''));
         $password = trim((string)($data['password'] ?? ''));
 
@@ -142,6 +154,10 @@ class MemberService
             ':phone' => $phone,
             ':email' => $email ?: null,
         ];
+        foreach ($profile as $column => $value) {
+            $fields[] = "{$column} = :{$column}";
+            $params[":" . $column] = $value;
+        }
 
         if ($canChangeStatus) {
             $fields[] = 'Status = :status';
@@ -158,10 +174,48 @@ class MemberService
         );
         $stmt->execute($params);
 
+        self::saveDocuments($memberId, $_FILES ?? [], Database::connection());
+
         self::linkUnmatchedContributions($memberId, $nationalId);
 
         if ($canChangePassword && $password !== '') {
             self::sendPasswordChangedSms($phone, $firstName, $lastName, $memberId, $password);
+        }
+    }
+
+    private static function profileValues(array $data): array
+    {
+        $columns = ['DateOfBirth','Gender','Nationality','MaritalStatus','PostalAddress','PhysicalAddress','Profession','Industry','EmployerName','StaffPayrollNumber','EmploymentPosition','GrossMonthlyIncome','BusinessDetails','MonthlyContribution','RemittanceMode','InitialShareCapital','RegistrationFee','JoiningDate','Branch','NomineeName','NomineeNationalID','NomineeDateOfBirth','NomineeRelationship','NomineePhone','NomineeAllocation'];
+        $values = [];
+        foreach ($columns as $column) $values[$column] = trim((string)($data[$column] ?? '')) ?: null;
+        return $values;
+    }
+
+    private static function saveDocuments(string $memberId, array $files, PDO $pdo): void
+    {
+        $map = [
+            'national_id_file' => ['nationalID', 'NationalIDDocument', ['pdf']],
+            'kra_file' => ['KRA', 'KRADocument', ['pdf']],
+            'passport_photo_file' => ['passportPhoto', 'PassportPhoto', ['jpg','jpeg','png','webp']],
+            'membership_form_file' => ['membership_form', 'MembershipForm', ['pdf']],
+        ];
+        $root = dirname(__DIR__) . '/member_documents';
+        $updates = [];
+        foreach ($map as $input => [$folder, $column, $extensions]) {
+            if (empty($files[$input]) || $files[$input]['error'] === UPLOAD_ERR_NO_FILE) continue;
+            $file = $files[$input];
+            if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > 10 * 1024 * 1024) throw new RuntimeException('Document upload failed or exceeds 10 MB.');
+            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($extension, $extensions, true) || !is_uploaded_file($file['tmp_name'])) throw new RuntimeException('Invalid document type for ' . $folder . '.');
+            $directory = $root . '/' . $folder;
+            if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) throw new RuntimeException('Unable to create member document folder.');
+            $name = preg_replace('/[^A-Za-z0-9_-]/', '_', $memberId) . '_' . strtolower($folder) . '.' . $extension;
+            if (!move_uploaded_file($file['tmp_name'], $directory . '/' . $name)) throw new RuntimeException('Unable to save uploaded document.');
+            $updates[] = [$column, 'member_documents/' . $folder . '/' . $name];
+        }
+        foreach ($updates as [$column, $path]) {
+            $stmt = $pdo->prepare("UPDATE members SET {$column} = :path WHERE MemberID = :member_id");
+            $stmt->execute([':path' => $path, ':member_id' => $memberId]);
         }
     }
 
