@@ -121,8 +121,8 @@ function e($value): string
           <?php endforeach; ?>
           </div></fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Occupation &amp; Income</legend><div class="row g-3">
-          <?php foreach (['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date'] as $field => $label): ?>
-            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= $field === 'JoiningDate' ? e($member[$field] ?: date('Y-m-d')) : e($member[$field] ?? '') ?>" <?= $field === 'JoiningDate' ? 'type="date" readonly' : (str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','RegistrationFee'],true) ? 'type="number" step="0.01"' : '')) ?>></div>
+          <?php foreach (['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','JoiningDate'=>'Joining Date'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= $field === 'JoiningDate' ? e($member[$field] ?: date('Y-m-d')) : e($member[$field] ?? '') ?>" <?= $field === 'JoiningDate' ? 'type="date" readonly' : (str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome'],true) ? 'type="number" step="0.01"' : '')) ?>></div>
           <?php endforeach; ?>
           </div></fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend><div class="row g-3">
