@@ -33,6 +33,7 @@ class MemberService
         $status = $depositBalance <= 0 ? 'Active' : 'Pending';
 
         $pdo->beginTransaction();
+        $savedDocuments = [];
         try {
             $stmt = $pdo->prepare(
                 'INSERT INTO members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Password, Status,
@@ -88,13 +89,13 @@ class MemberService
             }
 
             self::linkUnmatchedContributions($memberId, $nationalId);
+            self::saveDocuments($memberId, $_FILES ?? [], $pdo, $savedDocuments);
             $pdo->commit();
         } catch (Throwable $error) {
             $pdo->rollBack();
+            foreach ($savedDocuments as $path) if (is_file($path)) unlink($path);
             throw $error;
         }
-
-        self::saveDocuments($memberId, $_FILES ?? [], $pdo);
 
         if ($status === 'Active') {
             $fullName = trim($firstName . ' ' . $lastName);
@@ -191,26 +192,31 @@ class MemberService
         return $values;
     }
 
-    private static function saveDocuments(string $memberId, array $files, PDO $pdo): void
+    private static function saveDocuments(string $memberId, array $files, PDO $pdo, array &$savedDocuments = []): void
     {
         $map = [
-            'national_id_file' => ['nationalID', 'NationalIDDocument', ['pdf']],
-            'kra_file' => ['KRA', 'KRADocument', ['pdf']],
-            'passport_photo_file' => ['passportPhoto', 'PassportPhoto', ['jpg','jpeg','png','webp']],
-            'membership_form_file' => ['membership_form', 'MembershipForm', ['pdf']],
+            'national_id_file' => ['nationalID', 'id', 'NationalIDDocument', ['pdf']],
+            'kra_file' => ['KRA', 'kra', 'KRADocument', ['pdf']],
+            'passport_photo_file' => ['passportPhoto', 'photo', 'PassportPhoto', ['jpg','jpeg','png','webp']],
+            'membership_form_file' => ['membership_form', 'form', 'MembershipForm', ['pdf']],
         ];
         $root = dirname(__DIR__) . '/member_documents';
         $updates = [];
-        foreach ($map as $input => [$folder, $column, $extensions]) {
+        foreach ($map as $input => [$folder, $suffix, $column, $extensions]) {
             if (empty($files[$input]) || $files[$input]['error'] === UPLOAD_ERR_NO_FILE) continue;
             $file = $files[$input];
             if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] > 10 * 1024 * 1024) throw new RuntimeException('Document upload failed or exceeds 10 MB.');
             $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             if (!in_array($extension, $extensions, true) || !is_uploaded_file($file['tmp_name'])) throw new RuntimeException('Invalid document type for ' . $folder . '.');
+            $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+            $allowedMimes = $folder === 'passportPhoto' ? ['image/jpeg','image/png','image/webp'] : ['application/pdf'];
+            if (!in_array($mime, $allowedMimes, true)) throw new RuntimeException('The uploaded file content does not match the required type for ' . $folder . '.');
             $directory = $root . '/' . $folder;
             if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) throw new RuntimeException('Unable to create member document folder.');
-            $name = preg_replace('/[^A-Za-z0-9_-]/', '_', $memberId) . '_' . strtolower($folder) . '.' . $extension;
+            $name = preg_replace('/[^A-Za-z0-9_-]/', '_', $memberId) . '_' . $suffix . '.' . $extension;
             if (!move_uploaded_file($file['tmp_name'], $directory . '/' . $name)) throw new RuntimeException('Unable to save uploaded document.');
+            $absolutePath = $directory . '/' . $name;
+            $savedDocuments[] = $absolutePath;
             $updates[] = [$column, 'member_documents/' . $folder . '/' . $name];
         }
         foreach ($updates as [$column, $path]) {
