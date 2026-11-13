@@ -68,10 +68,10 @@ admin_header('loans_portfolio', 'Loan Portfolio Analytics');
       <p class="text-muted mb-0">Executive visual dashboard for SACCO decision-making, liquidity monitoring, and credit risk control.</p>
     </div>
     <div class="d-flex gap-2">
-      <a href="loans_manage.php" class="btn btn-outline-primary fw-semibold">
+      <a href="loans_manage" class="btn btn-outline-primary fw-semibold">
         <i class="bi bi-list-check me-1"></i> Manage Loans
       </a>
-      <a href="loans_create.php" class="btn btn-primary fw-semibold">
+      <a href="loans_create" class="btn btn-primary fw-semibold">
         <i class="bi bi-plus-circle me-1"></i> New Product
       </a>
     </div>

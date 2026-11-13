@@ -44,12 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_loan'])) {
 
         $_SESSION['flash_message'] = "Your loan application #$appId has been submitted successfully!";
         $_SESSION['flash_message_type'] = 'success';
-        header("Location: dashboard.php?tab=progress");
+        header("Location: dashboard?tab=progress");
         exit;
     } catch (Throwable $e) {
         $_SESSION['flash_message'] = $e->getMessage();
         $_SESSION['flash_message_type'] = 'danger';
-        header("Location: dashboard.php?tab=catalog");
+        header("Location: dashboard?tab=catalog");
         exit;
     }
 }
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['refresh_loan_state'])
         $_SESSION['flash_message'] = "Failed to refresh loan state: " . $e->getMessage();
         $_SESSION['flash_message_type'] = 'danger';
     }
-    header("Location: dashboard.php?tab=active");
+    header("Location: dashboard?tab=active");
     exit;
 }
 
@@ -195,7 +195,7 @@ function e($value): string
 
 function dashboardUrl(array $params): string
 {
-    return 'dashboard.php?' . http_build_query($params);
+    return 'dashboard?' . http_build_query($params);
 }
 ?>
 <!DOCTYPE html>
@@ -378,7 +378,7 @@ function dashboardUrl(array $params): string
           <div class="small opacity-75">Member account</div>
         </div>
       </div>
-      <a class="text-white fw-bold text-decoration-none" href="../auth/logout.php">Logout</a>
+      <a class="text-white fw-bold text-decoration-none" href="../auth/logout">Logout</a>
     </div>
   </header>
 
@@ -648,7 +648,7 @@ function dashboardUrl(array $params): string
         <div class="modal fade" id="applyLoanModal" tabindex="-1" aria-labelledby="applyLoanModalLabel" aria-hidden="true">
           <div class="modal-dialog">
             <div class="modal-content border-0 shadow-lg">
-              <form method="post" action="dashboard.php?tab=catalog" id="applyLoanForm">
+              <form method="post" action="dashboard?tab=catalog" id="applyLoanForm">
                 <input type="hidden" name="apply_loan" value="1">
                 <input type="hidden" name="loan_id" id="modalLoanId" value="">
 
@@ -867,7 +867,7 @@ function dashboardUrl(array $params): string
                     </div>
 
                     <!-- Prominent "Refresh Loan State" button with spinner -->
-                    <form method="post" action="dashboard.php?tab=active" id="refreshForm_<?= $act['activeLoanID'] ?>" class="d-inline">
+                    <form method="post" action="dashboard?tab=active" id="refreshForm_<?= $act['activeLoanID'] ?>" class="d-inline">
                       <input type="hidden" name="refresh_loan_state" value="1">
                       <input type="hidden" name="active_loan_id" value="<?= (int)$act['activeLoanID'] ?>">
                       <button type="submit" class="btn btn-primary fw-bold shadow-sm" onclick="this.querySelector('i').classList.add('spin-anim');">

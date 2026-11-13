@@ -11,38 +11,38 @@ if (!function_exists('admin_header')) {
     function admin_header(string $active, string $subtitle = '', bool $wide = true): void
     {
         $links = [
-            'dashboard' => ['label' => 'Dashboard', 'url' => 'index.php'],
-            'register_member' => ['label' => 'Register Member', 'url' => 'register_member.php'],
-            'manage_jobs' => ['label' => 'Manage Jobs', 'url' => 'manage_jobs.php'],
-            'reports' => ['label' => 'Reports', 'url' => 'reports.php'],
-            'members' => ['label' => 'Members', 'url' => 'members.php'],
+            'dashboard' => ['label' => 'Dashboard', 'url' => 'index'],
+            'register_member' => ['label' => 'Register Member', 'url' => 'register_member'],
+            'manage_jobs' => ['label' => 'Manage Jobs', 'url' => 'manage_jobs'],
+            'reports' => ['label' => 'Reports', 'url' => 'reports'],
+            'members' => ['label' => 'Members', 'url' => 'members'],
             'loans' => [
                 'label' => 'Loans',
-                'url' => 'loans_manage.php',
+                'url' => 'loans_manage',
                 'sub' => [
-                    'loans_create' => ['label' => 'Create', 'url' => 'loans_create.php'],
-                    'loans_manage' => ['label' => 'Loans', 'url' => 'loans_manage.php'],
-                    'loans_portfolio' => ['label' => 'Loan Portfolio', 'url' => 'loans_portfolio.php'],
+                    'loans_create' => ['label' => 'Create', 'url' => 'loans_create'],
+                    'loans_manage' => ['label' => 'Loans', 'url' => 'loans_manage'],
+                    'loans_portfolio' => ['label' => 'Loan Portfolio', 'url' => 'loans_portfolio'],
                 ]
             ],
             'withdrawals' => [
                 'label' => 'Withdrawals',
-                'url' => 'withdrawals.php',
+                'url' => 'withdrawals',
                 'sub' => [
-                    'withdraw' => ['label' => 'Withdraw', 'url' => 'withdrawals.php'],
-                    'withdrawal_logs' => ['label' => 'Withdrawal Logs', 'url' => 'withdrawal_logs.php'],
+                    'withdraw' => ['label' => 'Withdraw', 'url' => 'withdrawals'],
+                    'withdrawal_logs' => ['label' => 'Withdrawal Logs', 'url' => 'withdrawal_logs'],
                 ]
             ],
             'credit_transfer' => [
                 'label' => 'Credit Transfer',
-                'url' => 'credit_transfer.php',
+                'url' => 'credit_transfer',
                 'sub' => [
-                    'credit_transfer' => ['label' => 'Transfer Credit', 'url' => 'credit_transfer.php'],
-                    'credit_transfer_logs' => ['label' => 'Credit Transfer Logs', 'url' => 'credit_transfer_logs.php'],
+                    'credit_transfer' => ['label' => 'Transfer Credit', 'url' => 'credit_transfer'],
+                    'credit_transfer_logs' => ['label' => 'Credit Transfer Logs', 'url' => 'credit_transfer_logs'],
                 ]
             ],
-            'messages' => ['label' => 'Messages', 'url' => 'messages.php'],
-            'settings' => ['label' => 'Settings', 'url' => 'settings.php'],
+            'messages' => ['label' => 'Messages', 'url' => 'messages'],
+            'settings' => ['label' => 'Settings', 'url' => 'settings'],
         ];
         $shellClass = $wide ? 'admin-shell' : 'admin-shell admin-shell--narrow';
         ?>
@@ -103,7 +103,7 @@ if (!function_exists('admin_header')) {
                   <?php endif; ?>
                 </div>
               </div>
-              <a class="admin-logout-link" href="../auth/admin_logout.php">Logout</a>
+              <a class="admin-logout-link" href="../auth/admin_logout">Logout</a>
             </div>
           </div>
         </header>

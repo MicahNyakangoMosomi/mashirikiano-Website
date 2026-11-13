@@ -1,19 +1,36 @@
-RewriteEngine On
+<IfModule mod_rewrite.c>
+  RewriteEngine On
 
-# Admin clean loan routes
-RewriteRule ^admin/loans/create/?$ admin/loans_create.php [L,QSA]
-RewriteRule ^admin/loans/manage/?$ admin/loans_manage.php [L,QSA]
-RewriteRule ^admin/loans/portfolio/?$ admin/loans_portfolio.php [L,QSA]
+  # ----------------------------------------------------------------------
+  # 1. Redirect /index.php to root / (or /subfolder/index.php to /subfolder/)
+  # ----------------------------------------------------------------------
+  RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/(.*)index\.php [NC]
+  RewriteRule ^(.*)index\.php$ $1 [R=301,L]
 
-# Member clean loan routes
-RewriteRule ^member/loans/catalog/?$ member/dashboard.php?tab=catalog [L,QSA]
-RewriteRule ^member/loans/progress/?$ member/dashboard.php?tab=progress [L,QSA]
-RewriteRule ^member/loans/active/?$ member/dashboard.php?tab=active [L,QSA]
-RewriteRule ^member/loans/ledger/?$ member/dashboard.php?tab=ledger [L,QSA]
+  # ----------------------------------------------------------------------
+  # 2. Strip .php from browser address bar (External 301 Redirect for GET)
+  # ----------------------------------------------------------------------
+  RewriteCond %{REQUEST_METHOD} !POST
+  RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/([^.]+)\.php [NC]
+  RewriteRule ^(.*)\.php$ $1 [R=301,L,QSA]
 
-# Auto-append .php if file exists
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME}.php -f
-RewriteRule ^(.*)$ $1.php [L,QSA]
+  # ----------------------------------------------------------------------
+  # 3. Clean Friendly Routes for Loan Management & Member Portal
+  # ----------------------------------------------------------------------
+  RewriteRule ^admin/loans/create/?$ admin/loans_create.php [L,QSA]
+  RewriteRule ^admin/loans/manage/?$ admin/loans_manage.php [L,QSA]
+  RewriteRule ^admin/loans/portfolio/?$ admin/loans_portfolio.php [L,QSA]
 
+  RewriteRule ^member/loans/catalog/?$ member/dashboard.php?tab=catalog [L,QSA]
+  RewriteRule ^member/loans/progress/?$ member/dashboard.php?tab=progress [L,QSA]
+  RewriteRule ^member/loans/active/?$ member/dashboard.php?tab=active [L,QSA]
+  RewriteRule ^member/loans/ledger/?$ member/dashboard.php?tab=ledger [L,QSA]
+
+  # ----------------------------------------------------------------------
+  # 4. Internally map extensionless URLs to their actual .php files
+  # ----------------------------------------------------------------------
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME}.php -f
+  RewriteRule ^(.+?)/?$ $1.php [L,QSA]
+</IfModule>

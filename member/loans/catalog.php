@@ -1,4 +1,3 @@
 <?php
-header('Location: ../dashboard.php?tab=catalog');
+header('Location: ../dashboard?tab=catalog');
 exit;
-

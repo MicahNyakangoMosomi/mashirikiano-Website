@@ -1,4 +1,3 @@
 <?php
-header('Location: ../dashboard.php?tab=active');
+header('Location: ../dashboard?tab=active');
 exit;
-

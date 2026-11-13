@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         $_SESSION['flash_message'] = "Application #$appId approved successfully! Active loan activated with M-Pesa Repayment Account: " . $result['repayment_account'];
         $_SESSION['flash_message_type'] = 'success';
-        header("Location: loans_manage.php?tab=pending");
+        header("Location: loans_manage?tab=pending");
         exit;
     } catch (Throwable $e) {
         $message = "Approval failed: " . $e->getMessage();
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         $_SESSION['flash_message'] = "Application #$appId has been marked as REJECTED.";
         $_SESSION['flash_message_type'] = 'warning';
-        header("Location: loans_manage.php?tab=pending");
+        header("Location: loans_manage?tab=pending");
         exit;
     } catch (Throwable $e) {
         $message = "Rejection failed: " . $e->getMessage();
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         $_SESSION['flash_message'] = "Interest accrual refreshed for loan #$activeLoanId. Accrued Interest: KES " . number_format((float)$loan['accruedInterest'], 2);
         $_SESSION['flash_message_type'] = 'success';
-        header("Location: loans_manage.php?tab=" . urlencode($_GET['tab'] ?? 'all'));
+        header("Location: loans_manage?tab=" . urlencode($_GET['tab'] ?? 'all'));
         exit;
     } catch (Throwable $e) {
         $message = "Accrual failed: " . $e->getMessage();
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $batch = LoanService::runEndOfDayBatch($pdo);
         $_SESSION['flash_message'] = "EOD batch completed! Processed: {$batch['processed']} loans | Flagged in Arrears: {$batch['flagged_in_arrears']} | Shifted Interest: KES " . number_format($batch['shifted_interest'], 2);
         $_SESSION['flash_message_type'] = 'info';
-        header("Location: loans_manage.php?tab=" . urlencode($_GET['tab'] ?? 'all'));
+        header("Location: loans_manage?tab=" . urlencode($_GET['tab'] ?? 'all'));
         exit;
     } catch (Throwable $e) {
         $message = "EOD batch execution error: " . $e->getMessage();
@@ -240,13 +240,13 @@ admin_header('loans_manage', 'Monitor Member Loans');
       <p class="text-muted mb-0">Live operational ledger, real-time balances, approval queue, and audit trail.</p>
     </div>
     <div class="d-flex gap-2">
-      <form method="post" action="loans_manage.php" onsubmit="return confirm('Run daily interest accrual catch-up and check for arrears on all active loans?');">
+      <form method="post" action="loans_manage" onsubmit="return confirm('Run daily interest accrual catch-up and check for arrears on all active loans?');">
         <input type="hidden" name="action" value="run_eod_batch">
         <button type="submit" class="btn btn-outline-secondary fw-semibold">
           <i class="bi bi-clock-history me-1"></i> Run EOD Batch
         </button>
       </form>
-      <a href="loans_create.php" class="btn btn-primary fw-semibold">
+      <a href="loans_create" class="btn btn-primary fw-semibold">
         <i class="bi bi-plus-circle me-1"></i> New Product
       </a>
     </div>
@@ -266,27 +266,27 @@ admin_header('loans_manage', 'Monitor Member Loans');
         <div class="col-lg-8">
           <ul class="nav nav-pills nav-pills-custom gap-2">
             <li class="nav-item">
-              <a class="nav-link <?= $activeTab === 'all' ? 'active' : '' ?>" href="loans_manage.php?tab=all<?= $search ? '&search=' . urlencode($search) : '' ?>">
+              <a class="nav-link <?= $activeTab === 'all' ? 'active' : '' ?>" href="loans_manage?tab=all<?= $search ? '&search=' . urlencode($search) : '' ?>">
                 All Loans
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link <?= $activeTab === 'active' ? 'active' : '' ?>" href="loans_manage.php?tab=active<?= $search ? '&search=' . urlencode($search) : '' ?>">
+              <a class="nav-link <?= $activeTab === 'active' ? 'active' : '' ?>" href="loans_manage?tab=active<?= $search ? '&search=' . urlencode($search) : '' ?>">
                 Active
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link <?= $activeTab === 'in_arrears' ? 'active' : '' ?>" href="loans_manage.php?tab=in_arrears<?= $search ? '&search=' . urlencode($search) : '' ?>">
+              <a class="nav-link <?= $activeTab === 'in_arrears' ? 'active' : '' ?>" href="loans_manage?tab=in_arrears<?= $search ? '&search=' . urlencode($search) : '' ?>">
                 In Arrears
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link <?= $activeTab === 'closed' ? 'active' : '' ?>" href="loans_manage.php?tab=closed<?= $search ? '&search=' . urlencode($search) : '' ?>">
+              <a class="nav-link <?= $activeTab === 'closed' ? 'active' : '' ?>" href="loans_manage?tab=closed<?= $search ? '&search=' . urlencode($search) : '' ?>">
                 Closed
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link <?= $activeTab === 'pending' ? 'active' : '' ?> position-relative" href="loans_manage.php?tab=pending<?= $search ? '&search=' . urlencode($search) : '' ?>">
+              <a class="nav-link <?= $activeTab === 'pending' ? 'active' : '' ?> position-relative" href="loans_manage?tab=pending<?= $search ? '&search=' . urlencode($search) : '' ?>">
                 Pending Approval
                 <?php if ($pendingCount > 0): ?>
                   <span class="badge bg-danger ms-1"><?= $pendingCount ?></span>
@@ -296,12 +296,12 @@ admin_header('loans_manage', 'Monitor Member Loans');
           </ul>
         </div>
         <div class="col-lg-4">
-          <form method="get" action="loans_manage.php" class="input-group">
+          <form method="get" action="loans_manage" class="input-group">
             <input type="hidden" name="tab" value="<?= admin_e($activeTab) ?>">
             <input type="text" name="search" class="form-control" placeholder="Search by name, ID, or 5-char code" value="<?= admin_e($search) ?>">
             <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
             <?php if ($search !== ''): ?>
-              <a href="loans_manage.php?tab=<?= admin_e($activeTab) ?>" class="btn btn-outline-secondary">Clear</a>
+              <a href="loans_manage?tab=<?= admin_e($activeTab) ?>" class="btn btn-outline-secondary">Clear</a>
             <?php endif; ?>
           </form>
         </div>
@@ -369,14 +369,14 @@ admin_header('loans_manage', 'Monitor Member Loans');
                   </td>
                   <td class="text-end">
                     <div class="btn-group btn-group-sm">
-                      <form method="post" action="loans_manage.php?tab=<?= admin_e($activeTab) ?>" class="d-inline">
+                      <form method="post" action="loans_manage?tab=<?= admin_e($activeTab) ?>" class="d-inline">
                         <input type="hidden" name="action" value="refresh_accrual">
                         <input type="hidden" name="active_loan_id" value="<?= (int)$row['activeLoanID'] ?>">
                         <button type="submit" class="btn btn-outline-info" title="Recalculate daily interest accrual">
                           <i class="bi bi-arrow-repeat"></i>
                         </button>
                       </form>
-                      <a href="loans_manage.php?tab=<?= admin_e($activeTab) ?>&view_ledger=<?= (int)$row['activeLoanID'] ?>" class="btn btn-outline-primary fw-semibold">
+                      <a href="loans_manage?tab=<?= admin_e($activeTab) ?>&view_ledger=<?= (int)$row['activeLoanID'] ?>" class="btn btn-outline-primary fw-semibold">
                         <i class="bi bi-journal-text me-1"></i> View Ledger
                       </a>
                     </div>
@@ -446,7 +446,7 @@ admin_header('loans_manage', 'Monitor Member Loans');
                   <td class="text-end">
                     <div class="d-inline-flex gap-2">
                       <!-- Approve Button & Modal -->
-                      <form method="post" action="loans_manage.php" onsubmit="return confirm('Approve this loan application? This will generate a unique 5-character M-Pesa routing account, disburse the funds into active ledger, and notify the member via SMS.');">
+                      <form method="post" action="loans_manage" onsubmit="return confirm('Approve this loan application? This will generate a unique 5-character M-Pesa routing account, disburse the funds into active ledger, and notify the member via SMS.');">
                         <input type="hidden" name="action" value="approve_application">
                         <input type="hidden" name="application_id" value="<?= (int)$app['loanApplicationID'] ?>">
                         <button type="submit" class="btn btn-sm btn-success fw-bold">
@@ -464,7 +464,7 @@ admin_header('loans_manage', 'Monitor Member Loans');
                     <div class="modal fade" id="rejectModal<?= (int)$app['loanApplicationID'] ?>" tabindex="-1" aria-hidden="true">
                       <div class="modal-dialog">
                         <div class="modal-content text-start border-0 shadow">
-                          <form method="post" action="loans_manage.php">
+                          <form method="post" action="loans_manage">
                             <input type="hidden" name="action" value="reject_application">
                             <input type="hidden" name="application_id" value="<?= (int)$app['loanApplicationID'] ?>">
                             <div class="modal-header bg-danger text-white">
@@ -515,7 +515,7 @@ admin_header('loans_manage', 'Monitor Member Loans');
           <h5 class="modal-title fw-bold">
             <i class="bi bi-journal-check me-2"></i> Loan Audit Trail & Repayment Ledger (Active Loan #<?= $viewLoanId ?>)
           </h5>
-          <a href="loans_manage.php?tab=<?= admin_e($activeTab) ?>" class="btn-close btn-close-white"></a>
+          <a href="loans_manage?tab=<?= admin_e($activeTab) ?>" class="btn-close btn-close-white"></a>
         </div>
         <div class="modal-body p-4">
           <div class="table-responsive">
@@ -572,7 +572,7 @@ admin_header('loans_manage', 'Monitor Member Loans');
           </div>
         </div>
         <div class="modal-footer">
-          <a href="loans_manage.php?tab=<?= admin_e($activeTab) ?>" class="btn btn-secondary">Close Ledger</a>
+          <a href="loans_manage?tab=<?= admin_e($activeTab) ?>" class="btn btn-secondary">Close Ledger</a>
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
 <?php
-header('Location: ../dashboard.php?tab=ledger');
+header('Location: ../dashboard?tab=ledger');
 exit;
-

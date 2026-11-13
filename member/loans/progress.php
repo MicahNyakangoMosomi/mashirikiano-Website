@@ -1,4 +1,3 @@
 <?php
-header('Location: ../dashboard.php?tab=progress');
+header('Location: ../dashboard?tab=progress');
 exit;
-

@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_loan_product']
 
         $_SESSION['flash_message'] = "Loan product '$loanType' configured successfully!";
         $_SESSION['flash_message_type'] = 'success';
-        header("Location: loans_create.php");
+        header("Location: loans_create");
         exit;
     } catch (Throwable $e) {
         $message = $e->getMessage();
@@ -118,10 +118,10 @@ admin_header('loans_create', 'Configure Loan Products');
       <p class="text-muted mb-0">Configure lending parameters, borrowing limits, wallet qualification criteria, and accrual models.</p>
     </div>
     <div class="d-flex gap-2">
-      <a href="loans_manage.php" class="btn btn-outline-primary fw-semibold">
+      <a href="loans_manage" class="btn btn-outline-primary fw-semibold">
         <i class="bi bi-list-check me-1"></i> Monitor Loans
       </a>
-      <a href="loans_portfolio.php" class="btn btn-outline-success fw-semibold">
+      <a href="loans_portfolio" class="btn btn-outline-success fw-semibold">
         <i class="bi bi-graph-up me-1"></i> Loan Portfolio
       </a>
     </div>
@@ -142,7 +142,7 @@ admin_header('loans_create', 'Configure Loan Products');
           <i class="bi bi-plus-circle me-1 text-primary"></i> New Loan Configuration Form
         </div>
 
-        <form method="post" action="loans_create.php" id="loanProductForm">
+        <form method="post" action="loans_create" id="loanProductForm">
           <input type="hidden" name="create_loan_product" value="1">
 
           <div class="mb-3">

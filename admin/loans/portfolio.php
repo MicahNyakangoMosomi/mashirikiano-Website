@@ -1,4 +1,3 @@
 <?php
-header('Location: ../loans_portfolio.php');
+header('Location: ../loans_portfolio');
 exit;
-
