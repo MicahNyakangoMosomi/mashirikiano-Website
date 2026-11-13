@@ -1005,20 +1005,17 @@ function dashboardUrl(array $params): string
               <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>Date</th>
-                    <th>Loan Facility</th>
+                    <th class="ps-3">Date</th>
+                    <th>Loan Type</th>
                     <th>Event Type</th>
                     <th>M-Pesa Receipt</th>
-                    <th class="text-end">Total Amount</th>
-                    <th>Waterfall Split (Penalty | Billed | Accrued | Principal)</th>
-                    <th class="text-end">Principal Snapshot</th>
-                    <th class="text-end">Accrued Snapshot</th>
+                    <th class="text-end pe-4">Total Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   <?php foreach ($memberLedger as $tx): ?>
                     <tr>
-                      <td class="small fw-semibold"><?= e($tx['transactionDate']) ?></td>
+                      <td class="ps-3 small fw-semibold"><?= e($tx['transactionDate']) ?></td>
                       <td>
                         <div class="fw-semibold text-dark"><?= e($tx['loanType']) ?></div>
                         <span class="badge bg-light text-dark border" style="font-family: monospace; font-size: 0.72rem;">
@@ -1030,27 +1027,15 @@ function dashboardUrl(array $params): string
                           <?= e($tx['transactionType']) ?>
                         </span>
                       </td>
-                      <td class="small"><?= e($tx['mpesaReceiptNumber'] ?: '-') ?></td>
-                      <td class="text-end fw-bold">
+                      <td class="small font-monospace"><?= e($tx['mpesaReceiptNumber'] ?: '-') ?></td>
+                      <td class="text-end pe-4 fw-bold text-dark text-nowrap">
                         KES <?= number_format((float)$tx['totalAmount'], 2) ?>
-                      </td>
-                      <td>
-                        <span class="badge bg-danger" style="font-size:0.7rem;" title="Allocated to late penalties">Pen: <?= number_format((float)$tx['allocatedPenalty'], 2) ?></span>
-                        <span class="badge bg-warning text-dark" style="font-size:0.7rem;" title="Allocated to overdue billed interest">Bil: <?= number_format((float)$tx['allocatedBilledInterest'], 2) ?></span>
-                        <span class="badge bg-info text-dark" style="font-size:0.7rem;" title="Allocated to current accrued interest">Acc: <?= number_format((float)$tx['allocatedAccruedInterest'], 2) ?></span>
-                        <span class="badge bg-success" style="font-size:0.7rem;" title="Allocated to loan principal">Prin: <?= number_format((float)$tx['allocatedPrincipal'], 2) ?></span>
-                      </td>
-                      <td class="text-end fw-semibold text-primary">
-                        KES <?= number_format((float)$tx['principalAfter'], 2) ?>
-                      </td>
-                      <td class="text-end fw-semibold text-danger">
-                        KES <?= number_format((float)$tx['accruedInterestAfter'], 2) ?>
                       </td>
                     </tr>
                   <?php endforeach; ?>
                   <?php if (empty($memberLedger)): ?>
                     <tr>
-                      <td colspan="8" class="text-center text-muted py-5">
+                      <td colspan="5" class="text-center text-muted py-5">
                         <i class="bi bi-journal-x fs-1 d-block text-secondary mb-2"></i>
                         No loan transaction events recorded yet.
                       </td>
