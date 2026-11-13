@@ -189,6 +189,14 @@ class MemberService
         $columns = ['DateOfBirth','Gender','Nationality','MaritalStatus','PostalAddress','PhysicalAddress','Profession','Industry','EmployerName','StaffPayrollNumber','EmploymentPosition','GrossMonthlyIncome','BusinessDetails','JoiningDate','NomineeName','NomineeNationalID','NomineeDateOfBirth','NomineeRelationship','NomineePhone','NomineeAllocation'];
         $values = [];
         foreach ($columns as $column) $values[$column] = trim((string)($data[$column] ?? '')) ?: null;
+
+        if ($values['GrossMonthlyIncome'] !== null && (!is_numeric($values['GrossMonthlyIncome']) || (float)$values['GrossMonthlyIncome'] <= 0)) {
+            throw new InvalidArgumentException('Gross monthly income must be greater than zero.');
+        }
+        if ($values['NomineeAllocation'] !== null && (!is_numeric($values['NomineeAllocation']) || (float)$values['NomineeAllocation'] <= 0 || (float)$values['NomineeAllocation'] > 100)) {
+            throw new InvalidArgumentException('Nominee allocation must be greater than zero and no more than 100%.');
+        }
+
         return $values;
     }
 
