@@ -72,6 +72,7 @@ function e($value): string
         <h1 class="h4 fw-bold mb-1">Register Member</h1>
         <p class="text-muted mb-4">Create SACCO members through the internal staff/admin workflow. Passwords are generated automatically.</p>
         <form method="post" enctype="multipart/form-data" class="row g-3" onsubmit="return confirm('Register this member and save the record to the database?');">
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Personal Info</legend><div class="row g-3">
           <div class="col-md-3">
             <label class="form-label" for="first_name">FirstName</label>
             <input class="form-control" id="first_name" name="first_name" required>
@@ -92,12 +93,25 @@ function e($value): string
             <label class="form-label" for="email">Email <span class="text-muted">(optional)</span></label>
             <input class="form-control" id="email" name="email" type="email">
           </div>
-          <?php foreach (['DateOfBirth'=>'Date of Birth','Gender'=>'Gender','Nationality'=>'Nationality','MaritalStatus'=>'Marital Status','PostalAddress'=>'Postal Address','PhysicalAddress'=>'Physical Address','Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','MonthlyContribution'=>'Monthly Contribution','RemittanceMode'=>'Remittance Mode','InitialShareCapital'=>'Initial Share Capital','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date','Branch'=>'Branch','NomineeName'=>'Nominee Name','NomineeNationalID'=>'Nominee National ID','NomineeDateOfBirth'=>'Nominee Date of Birth','NomineeRelationship'=>'Nominee Relationship','NomineePhone'=>'Nominee Phone','NomineeAllocation'=>'Nominee Allocation (%)'] as $field => $label): ?>
+          <?php foreach (['DateOfBirth'=>'Date of Birth','Gender'=>'Gender','Nationality'=>'Nationality','MaritalStatus'=>'Marital Status','PostalAddress'=>'Postal Address','PhysicalAddress'=>'Physical Address'] as $field => $label): ?>
             <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','MonthlyContribution','InitialShareCapital','RegistrationFee','NomineeAllocation'],true) ? 'type="number" step="0.01"' : '') ?>></div>
           <?php endforeach; ?>
+          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Occupation &amp; Contributions</legend><div class="row g-3">
+          <?php foreach (['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Staff/Payroll Number','EmploymentPosition'=>'Employment Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details','MonthlyContribution'=>'Monthly Contribution','RemittanceMode'=>'Remittance Mode','InitialShareCapital'=>'Initial Share Capital','RegistrationFee'=>'Registration Fee','JoiningDate'=>'Joining Date','Branch'=>'Branch'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (in_array($field,['GrossMonthlyIncome','MonthlyContribution','InitialShareCapital','RegistrationFee'],true) ? 'type="number" step="0.01"' : '') ?>></div>
+          <?php endforeach; ?>
+          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend><div class="row g-3">
+          <?php foreach (['NomineeName'=>'Full Name','NomineeNationalID'=>'National ID','NomineeDateOfBirth'=>'Date of Birth','NomineeRelationship'=>'Relationship','NomineePhone'=>'Phone','NomineeAllocation'=>'Allocation (%)'] as $field => $label): ?>
+            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (str_contains($field,'Allocation') ? 'type="number" step="0.01"' : '') ?>></div>
+          <?php endforeach; ?>
+          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">File Uploads</legend><div class="row g-3">
           <?php foreach (['national_id_file'=>'National ID/Passport/Alien ID PDF','kra_file'=>'KRA certificate PDF','passport_photo_file'=>'Passport photo image','membership_form_file'=>'Signed membership form PDF'] as $field => $label): ?>
             <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= $field === 'passport_photo_file' ? 'image/jpeg,image/png,image/webp' : 'application/pdf' ?>"></div>
           <?php endforeach; ?>
+          </div></fieldset>
           <div class="col-md-6">
             <label class="form-label" for="deposit_paid">Deposit Paid?</label>
             <select class="form-select" id="deposit_paid" name="deposit_paid" required>
