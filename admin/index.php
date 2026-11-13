@@ -165,15 +165,51 @@ $depositStats = $pdo->query(
     'SELECT COALESCE(SUM(PaidAmount), 0) AS EntranceFeesReserve FROM deposits'
 )->fetch() ?: [];
 
-$loanStats = $pdo->query(
-    "SELECT
-        COUNT(*) AS TotalLoanRequests,
-        SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END) AS PendingLoans,
-        SUM(CASE WHEN Status = 'Approved' THEN 1 ELSE 0 END) AS ActiveLoans,
-        COALESCE(SUM(CASE WHEN Status = 'Approved' THEN Amount ELSE 0 END), 0) AS LoanPortfolio,
-        COALESCE(SUM(CASE WHEN Status = 'Approved' AND DATE_FORMAT(CreatedAt, '%Y-%m') = DATE_FORMAT(CURRENT_DATE(), '%Y-%m') THEN Amount ELSE 0 END), 0) AS ThisMonthDisbursed
-     FROM loan_applications"
-)->fetch() ?: [];
+$loanStats = [
+    'TotalLoanRequests'  => 0,
+    'PendingLoans'       => 0,
+    'ActiveLoans'        => 0,
+    'LoanPortfolio'      => 0.0,
+    'ThisMonthDisbursed' => 0.0,
+];
+
+try {
+    // 1. Applications stats from loan_application
+    $appStats = $pdo->query(
+        "SELECT
+            COUNT(*) AS TotalLoanRequests,
+            SUM(CASE WHEN UPPER(status) = 'PENDING' THEN 1 ELSE 0 END) AS PendingLoans
+         FROM loan_application"
+    )->fetch() ?: [];
+    $loanStats['TotalLoanRequests'] = (int)($appStats['TotalLoanRequests'] ?? 0);
+    $loanStats['PendingLoans']      = (int)($appStats['PendingLoans'] ?? 0);
+
+    // 2. Active loan portfolio and disbursement stats from active_loan
+    $activeStats = $pdo->query(
+        "SELECT
+            COUNT(*) AS ActiveLoans,
+            COALESCE(SUM(principalBalance), 0) AS LoanPortfolio,
+            COALESCE(SUM(CASE WHEN DATE_FORMAT(disbursementDate, '%Y-%m') = DATE_FORMAT(CURRENT_DATE(), '%Y-%m') THEN originalPrincipal ELSE 0 END), 0) AS ThisMonthDisbursed
+         FROM active_loan
+         WHERE loanStatus IN ('ACTIVE', 'IN_ARREARS')"
+    )->fetch() ?: [];
+    $loanStats['ActiveLoans']        = (int)($activeStats['ActiveLoans'] ?? 0);
+    $loanStats['LoanPortfolio']      = (float)($activeStats['LoanPortfolio'] ?? 0);
+    $loanStats['ThisMonthDisbursed'] = (float)($activeStats['ThisMonthDisbursed'] ?? 0);
+} catch (Throwable $e) {
+    try {
+        $legacyStats = $pdo->query(
+            "SELECT
+                COUNT(*) AS TotalLoanRequests,
+                SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END) AS PendingLoans,
+                SUM(CASE WHEN Status = 'Approved' THEN 1 ELSE 0 END) AS ActiveLoans,
+                COALESCE(SUM(CASE WHEN Status = 'Approved' THEN Amount ELSE 0 END), 0) AS LoanPortfolio,
+                COALESCE(SUM(CASE WHEN Status = 'Approved' AND DATE_FORMAT(CreatedAt, '%Y-%m') = DATE_FORMAT(CURRENT_DATE(), '%Y-%m') THEN Amount ELSE 0 END), 0) AS ThisMonthDisbursed
+             FROM loan_applications"
+        )->fetch() ?: [];
+        $loanStats = array_merge($loanStats, $legacyStats);
+    } catch (Throwable $legacyErr) {}
+}
 
 $totalMembers = (int)($memberStats['TotalMembers'] ?? 0);
 $activeMembers = (int)($memberStats['ActiveMembers'] ?? 0);
@@ -247,17 +283,32 @@ $months = hydrateMonthly(
     'savings',
     true
 );
-$months = hydrateMonthly(
-    $pdo,
-    $months,
-    "SELECT DATE_FORMAT(CreatedAt, '%Y-%m') AS MonthKey, COALESCE(SUM(Amount), 0) AS Value
-     FROM loan_applications
-     WHERE Status = 'Approved'
-       AND CreatedAt >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), '%Y-%m-01')
-     GROUP BY DATE_FORMAT(CreatedAt, '%Y-%m')",
-    'loans',
-    true
-);
+try {
+    $months = hydrateMonthly(
+        $pdo,
+        $months,
+        "SELECT DATE_FORMAT(disbursementDate, '%Y-%m') AS MonthKey, COALESCE(SUM(originalPrincipal), 0) AS Value
+         FROM active_loan
+         WHERE disbursementDate >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), '%Y-%m-01')
+         GROUP BY DATE_FORMAT(disbursementDate, '%Y-%m')",
+        'loans',
+        true
+    );
+} catch (Throwable $e) {
+    try {
+        $months = hydrateMonthly(
+            $pdo,
+            $months,
+            "SELECT DATE_FORMAT(CreatedAt, '%Y-%m') AS MonthKey, COALESCE(SUM(Amount), 0) AS Value
+             FROM loan_applications
+             WHERE Status = 'Approved'
+               AND CreatedAt >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), '%Y-%m-01')
+             GROUP BY DATE_FORMAT(CreatedAt, '%Y-%m')",
+            'loans',
+            true
+        );
+    } catch (Throwable $legacyErr) {}
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
