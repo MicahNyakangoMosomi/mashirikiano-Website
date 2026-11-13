@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../classes/Auth.php';
+require_once __DIR__ . '/../classes/LoanService.php';
 require_once __DIR__ . '/admin_layout.php';
 
 Auth::requireAdmin();
@@ -11,24 +12,7 @@ try {
     $pdo->query('SELECT 1 FROM deposits LIMIT 1');
     $pdo->query('SELECT 1 FROM member_transactions LIMIT 1');
 
-    try {
-        $pdo->query('SELECT 1 FROM loan_applications LIMIT 1');
-    } catch (Throwable $error) {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS `loan_applications` (
-          `LoanApplicationID` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-          `MemberID` VARCHAR(40) NOT NULL,
-          `LoanType` VARCHAR(100) NOT NULL,
-          `Amount` DECIMAL(12,2) NOT NULL,
-          `ReturnDate` DATE NOT NULL,
-          `Status` ENUM('Pending', 'Approved', 'Not Approved') NOT NULL DEFAULT 'Pending',
-          `RejectionReason` VARCHAR(255) NULL,
-          `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          `UpdatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (`LoanApplicationID`),
-          KEY `idx_loan_applications_member` (`MemberID`),
-          KEY `idx_loan_applications_status` (`Status`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
-    }
+    LoanService::ensureTables($pdo);
 } catch (Throwable $error) {
     error_log('Admin dashboard setup error: ' . $error->getMessage());
     ?>

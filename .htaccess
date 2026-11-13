@@ -1,0 +1,19 @@
+RewriteEngine On
+
+# Admin clean loan routes
+RewriteRule ^admin/loans/create/?$ admin/loans_create.php [L,QSA]
+RewriteRule ^admin/loans/manage/?$ admin/loans_manage.php [L,QSA]
+RewriteRule ^admin/loans/portfolio/?$ admin/loans_portfolio.php [L,QSA]
+
+# Member clean loan routes
+RewriteRule ^member/loans/catalog/?$ member/dashboard.php?tab=catalog [L,QSA]
+RewriteRule ^member/loans/progress/?$ member/dashboard.php?tab=progress [L,QSA]
+RewriteRule ^member/loans/active/?$ member/dashboard.php?tab=active [L,QSA]
+RewriteRule ^member/loans/ledger/?$ member/dashboard.php?tab=ledger [L,QSA]
+
+# Auto-append .php if file exists
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [L,QSA]
+

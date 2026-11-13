@@ -16,7 +16,15 @@ if (!function_exists('admin_header')) {
             'manage_jobs' => ['label' => 'Manage Jobs', 'url' => 'manage_jobs.php'],
             'reports' => ['label' => 'Reports', 'url' => 'reports.php'],
             'members' => ['label' => 'Members', 'url' => 'members.php'],
-            'loan_applications' => ['label' => 'Loan Applications', 'url' => 'loan_applications.php'],
+            'loans' => [
+                'label' => 'Loans',
+                'url' => 'loans_manage.php',
+                'sub' => [
+                    'loans_create' => ['label' => 'Create', 'url' => 'loans_create.php'],
+                    'loans_manage' => ['label' => 'Loans', 'url' => 'loans_manage.php'],
+                    'loans_portfolio' => ['label' => 'Loan Portfolio', 'url' => 'loans_portfolio.php'],
+                ]
+            ],
             'withdrawals' => [
                 'label' => 'Withdrawals',
                 'url' => 'withdrawals.php',

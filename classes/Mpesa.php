@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/SmsService.php';
+require_once __DIR__ . '/LoanService.php';
 
 /**
  * Class Mpesa
@@ -121,6 +122,50 @@ class Mpesa
                 'message' => 'Transaction already exists',
                 'tran_id' => $data['TranID']
             ];
+        }
+
+        // Check if BillRefNumber matches a 5-character loan repayment account (e.g., 7M419)
+        $billRef = strtoupper(trim((string)($payload['BillRefNumber'] ?? '')));
+        if (preg_match('/^[0-9][A-Z][0-9]{3}$/', $billRef) || strlen($billRef) === 5) {
+            try {
+                LoanService::ensureTables($pdo);
+                $lStmt = $pdo->prepare("SELECT * FROM active_loan WHERE repayment_account = :acct AND loanStatus IN ('ACTIVE', 'IN_ARREARS') LIMIT 1");
+                $lStmt->execute([':acct' => $billRef]);
+                $activeLoan = $lStmt->fetch();
+
+                if ($activeLoan) {
+                    $repaymentResult = LoanService::processRepayment(
+                        $pdo,
+                        $billRef,
+                        (float)$data['Amount'],
+                        $data['TranID'],
+                        date('Y-m-d', strtotime($data['TranTime'] ?: 'now'))
+                    );
+
+                    $loanMember = self::findMemberById($activeLoan['memberID']);
+                    self::insertLedgerTransaction(
+                        $pdo,
+                        $data,
+                        $loanMember,
+                        (float)$data['Amount'],
+                        'loan_repayment',
+                        'loan_repayment',
+                        'Loan repayment for account ' . $billRef
+                    );
+
+                    return [
+                        'status' => 'recorded',
+                        'type' => 'loan_repayment',
+                        'message' => 'Loan repayment processed via waterfall engine',
+                        'tran_id' => $data['TranID'],
+                        'member_id' => $activeLoan['memberID'],
+                        'loan_repayment' => $repaymentResult,
+                        'data' => $data,
+                    ];
+                }
+            } catch (Throwable $loanErr) {
+                error_log('Loan repayment routing error: ' . $loanErr->getMessage());
+            }
         }
 
         // Try match member by National ID
@@ -402,6 +447,20 @@ class Mpesa
         ");
 
         $stmt->execute([':id' => $id]);
+
+        return $stmt->fetch() ?: null;
+    }
+
+    /**
+     * Find member by Member ID
+     */
+    private static function findMemberById(string $memberId): ?array
+    {
+        $stmt = Database::connection()->prepare("
+            SELECT * FROM members WHERE MemberID = :id LIMIT 1
+        ");
+
+        $stmt->execute([':id' => $memberId]);
 
         return $stmt->fetch() ?: null;
     }

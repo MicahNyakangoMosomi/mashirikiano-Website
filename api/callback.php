@@ -63,7 +63,7 @@ try {
      */
     $result = Mpesa::recordC2BCallback($payload);
 
-    if (isset($result['status']) && $result['status'] === 'recorded' && isset($result['data'])) {
+    if (isset($result['status']) && $result['status'] === 'recorded' && isset($result['data']) && ($result['type'] ?? '') !== 'loan_repayment') {
         $data = $result['data'];
         $amount = number_format($data['Amount'], 2);
         $sender_fullName = trim($data['FirstName'] . ' ' . $data['LastName']);

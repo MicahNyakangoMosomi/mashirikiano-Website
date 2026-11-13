@@ -3,10 +3,13 @@
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/MemberService.php';
 require_once __DIR__ . '/../classes/SmsService.php';
+require_once __DIR__ . '/../classes/LoanService.php';
 
 $member = Auth::requireMember();
 Auth::startSession();
 $pdo = Database::connection();
+LoanService::ensureTables($pdo);
+
 $message = '';
 $messageType = 'info';
 
@@ -16,105 +19,66 @@ if (isset($_SESSION['flash_message'])) {
     unset($_SESSION['flash_message'], $_SESSION['flash_message_type']);
 }
 
-// Auto-create loan_applications table if not exists (self-healing migration)
-try {
-    $pdo->query("SELECT 1 FROM `loan_applications` LIMIT 1");
-} catch (Throwable $e) {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `loan_applications` (
-      `LoanApplicationID` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-      `MemberID` VARCHAR(40) NOT NULL,
-      `LoanType` VARCHAR(100) NOT NULL,
-      `Amount` DECIMAL(12,2) NOT NULL,
-      `ReturnDate` DATE NOT NULL,
-      `Status` ENUM('Pending', 'Approved', 'Not Approved') NOT NULL DEFAULT 'Pending',
-      `RejectionReason` VARCHAR(255) NULL,
-      `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      `UpdatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (`LoanApplicationID`),
-      KEY `idx_loan_applications_member` (`MemberID`),
-      KEY `idx_loan_applications_status` (`Status`),
-      CONSTRAINT `fk_loan_applications_member`
-        FOREIGN KEY (`MemberID`) REFERENCES `members` (`MemberID`)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+$rawTab = $_GET['tab'] ?? 'dashboard';
+if ($rawTab === 'loan') {
+    $rawTab = 'catalog';
+} elseif ($rawTab === 'applications') {
+    $rawTab = 'progress';
 }
+$activeTab = in_array($rawTab, ['dashboard', 'catalog', 'progress', 'active', 'ledger', 'record'], true) ? $rawTab : 'dashboard';
 
-$activeTab = $_GET['tab'] ?? 'dashboard';
-if (!in_array($activeTab, ['dashboard', 'loan', 'applications', 'record'])) {
-    $activeTab = 'dashboard';
-}
-
-// Handle loan application form submission
+// -------------------------------------------------------------
+// Handle Action: Submit Loan Application (View 1)
+// -------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['apply_loan'])) {
     try {
-        $loanType = trim($_POST['loan_type'] ?? '');
+        $loanId = (int)($_POST['loan_id'] ?? 0);
         $amount = (float)($_POST['amount'] ?? 0);
-        $returnDate = trim($_POST['return_date'] ?? '');
+        $returnDate = trim((string)($_POST['return_date'] ?? ''));
 
-        if (empty($loanType)) {
-            throw new Exception("Please select a loan type.");
-        }
-        if ($amount <= 0) {
-            throw new Exception("Please enter a valid loan amount greater than 0.");
-        }
-        if (empty($returnDate)) {
-            throw new Exception("Please select a valid return date.");
-        }
-        
-        $today = date('Y-m-d');
-        if ($returnDate <= $today) {
-            throw new Exception("Return date must be in the future.");
+        if ($loanId <= 0) {
+            throw new Exception("Please select a valid loan option from the catalog.");
         }
 
-        // Save to DB
-        $stmt = $pdo->prepare("INSERT INTO loan_applications (MemberID, LoanType, Amount, ReturnDate, Status) VALUES (:member_id, :loan_type, :amount, :return_date, 'Pending')");
-        $stmt->execute([
-            ':member_id' => $member['MemberID'],
-            ':loan_type' => $loanType,
-            ':amount' => $amount,
-            ':return_date' => $returnDate
-        ]);
+        $appId = LoanService::submitApplication($pdo, (string)$member['MemberID'], $loanId, $amount, $returnDate);
 
-        $messageType = 'success';
-        $message = "Your loan application for $loanType of KES " . number_format($amount, 2) . " has been submitted successfully!";
-
-        // Send SMS to member
-        $formattedReturnDate = !empty($returnDate) ? date('d-M-Y', strtotime($returnDate)) : $returnDate;
-        $smsMsg = "Dear " . $member['FirstName'] . ", your application for " . $loanType . " of KES " . number_format($amount, 2) . " repayable by " . $formattedReturnDate . " has been received. Feedback will be given as soon as possible. Thank you.";
-        SmsService::sendSms($member['PrimaryNumber'], $smsMsg);
-        
-        $_SESSION['flash_message'] = $message;
-        $_SESSION['flash_message_type'] = $messageType;
-        header("Location: dashboard.php?tab=applications");
+        $_SESSION['flash_message'] = "Your loan application #$appId has been submitted successfully!";
+        $_SESSION['flash_message_type'] = 'success';
+        header("Location: dashboard.php?tab=progress");
         exit;
-
     } catch (Throwable $e) {
         $_SESSION['flash_message'] = $e->getMessage();
         $_SESSION['flash_message_type'] = 'danger';
-        header("Location: dashboard.php?tab=loan");
+        header("Location: dashboard.php?tab=catalog");
         exit;
     }
 }
 
-// Fetch totals & dashboard info from SaccoWallets and withdrawals table
-$walletStmt = $pdo->prepare("SELECT
-  COALESCE(SUM(Amount), 0) AS TotalContributions,
-  COALESCE(SUM(AkibaAmount), 0) AS TotalAkiba,
-  COALESCE(SUM(UshirikaAmount), 0) AS TotalUshirika
-  FROM SaccoWallets
-  WHERE MemberID = :member_id");
-$walletTotals = [];
-try {
-    $walletStmt->execute([':member_id' => $member['MemberID']]);
-    $walletTotals = $walletStmt->fetch() ?: [];
-} catch (Throwable $e) {}
+// -------------------------------------------------------------
+// Handle Action: Refresh Loan State (View 3 Accrual Trigger)
+// -------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['refresh_loan_state'])) {
+    try {
+        $activeLoanId = (int)($_POST['active_loan_id'] ?? 0);
+        $updatedLoan = LoanService::catchUpInterest($pdo, $activeLoanId);
 
-$totalContributions = (float)($walletTotals['TotalContributions'] ?? 0);
-$totalAkiba = (float)($walletTotals['TotalAkiba'] ?? 0);
-$totalUshirika = (float)($walletTotals['TotalUshirika'] ?? 0);
+        $_SESSION['flash_message'] = "Loan state refreshed! Rolling accrued interest is up-to-date (Current Accrued: KES " . number_format((float)$updatedLoan['accruedInterest'], 2) . ").";
+        $_SESSION['flash_message_type'] = 'success';
+    } catch (Throwable $e) {
+        $_SESSION['flash_message'] = "Failed to refresh loan state: " . $e->getMessage();
+        $_SESSION['flash_message_type'] = 'danger';
+    }
+    header("Location: dashboard.php?tab=active");
+    exit;
+}
 
-// Withdrawals directly from withdrawals table
+// Fetch member wallet balances from service
+$wallets = LoanService::getMemberWalletBalances($pdo, (string)$member['MemberID']);
+$akibaWallet = $wallets['akiba'];
+$totalUshirika = $wallets['ushirika'];
+$totalContributions = $wallets['totalContributions'];
+
+// Total withdrawals
 $wStmt = $pdo->prepare("SELECT COALESCE(SUM(Amount), 0) FROM withdrawals WHERE MemberID = :member_id");
 $totalWithdrawals = 0.00;
 try {
@@ -122,42 +86,61 @@ try {
     $totalWithdrawals = (float)$wStmt->fetchColumn();
 } catch (Throwable $e) {}
 
-// Fallback to member_transactions if SaccoWallets not yet backfilled or withdrawals empty
-if ($totalContributions <= 0) {
-    $totalStmt = $pdo->prepare("SELECT
-      COALESCE(SUM(CASE WHEN TransactionType = 'contribution' THEN Amount ELSE 0 END), 0) AS TotalContributions,
-      COALESCE(SUM(CASE WHEN TransactionType = 'withdrawal' THEN Amount ELSE 0 END), 0) AS TotalWithdrawals
-      FROM member_transactions
-      WHERE MemberID = :member_id");
-    $totalStmt->execute([':member_id' => $member['MemberID']]);
-    $totals = $totalStmt->fetch() ?: [];
-    $rawContrib = (float)($totals['TotalContributions'] ?? 0);
-    $totalContributions = $rawContrib;
-    $totalAkiba = round($rawContrib * 0.95, 2);
-    $totalUshirika = round($rawContrib * 0.05, 2);
-    if ($totalWithdrawals <= 0) {
-        $totalWithdrawals = (float)($totals['TotalWithdrawals'] ?? 0);
-    }
-}
+// Active loan balance (Principal + Interest + Penalties)
+$actBalStmt = $pdo->prepare("
+    SELECT COALESCE(SUM(principalBalance + accruedInterest + billedUnpaidInterest + penaltyBalance), 0)
+    FROM active_loan
+    WHERE memberID = :mid AND loanStatus IN ('ACTIVE', 'IN_ARREARS')
+");
+$actBalStmt->execute([':mid' => $member['MemberID']]);
+$totalLoanBalance = (float)$actBalStmt->fetchColumn();
 
-// Akiba Wallet = Total Akiba funds (95%) minus Total Withdrawals
-$akibaWallet = max(0.00, $totalAkiba - $totalWithdrawals);
-$netSavings = $akibaWallet;
-
-$recentStmt = $pdo->prepare("SELECT * FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal') ORDER BY COALESCE(TranTime, CreatedAt) DESC LIMIT 8");
+// Recent general transactions for dashboard
+$recentStmt = $pdo->prepare("SELECT * FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal', 'loan_repayment') ORDER BY COALESCE(TranTime, CreatedAt) DESC LIMIT 8");
 $recentStmt->execute([':member_id' => $member['MemberID']]);
 $recentTransactions = $recentStmt->fetchAll();
 
-// Fetch member's loan applications
-$loanAppsStmt = $pdo->prepare("SELECT * FROM loan_applications WHERE MemberID = :member_id ORDER BY CreatedAt DESC");
-$loanAppsStmt->execute([':member_id' => $member['MemberID']]);
-$loanApplications = $loanAppsStmt->fetchAll();
-$totalLoanBalance = 0.00;
-foreach ($loanApplications as $loanApplication) {
-    if ($loanApplication['Status'] === 'Approved') {
-        $totalLoanBalance += (float)$loanApplication['Amount'];
-    }
+// View 1 Data: Available Products & Eligibility
+$catalogProducts = $pdo->query("SELECT * FROM `loan` ORDER BY `maxAmount` ASC")->fetchAll();
+$productEligibility = [];
+foreach ($catalogProducts as $cp) {
+    $productEligibility[$cp['loanID']] = LoanService::checkEligibility($pdo, (string)$member['MemberID'], (int)$cp['loanID']);
 }
+
+// View 2 Data: Submitted Applications & Workflow Stepper
+$appsStmt = $pdo->prepare("
+    SELECT la.*, l.paymentPeriod, l.loanInterest, l.interestType
+    FROM loan_application la
+    LEFT JOIN loan l ON l.loanID = la.loanID
+    WHERE la.memberID = :mid
+    ORDER BY la.loanApplicationID DESC
+");
+$appsStmt->execute([':mid' => $member['MemberID']]);
+$memberApplications = $appsStmt->fetchAll();
+
+// View 3 Data: Active Loans & Live Operational Ledger
+$activeLoansStmt = $pdo->prepare("
+    SELECT al.*, la.loanType, la.amount as requestedAmount, l.paymentPeriod
+    FROM active_loan al
+    JOIN loan_application la ON la.loanApplicationID = al.loanApplicationID
+    LEFT JOIN loan l ON l.loanID = la.loanID
+    WHERE al.memberID = :mid
+    ORDER BY FIELD(al.loanStatus, 'IN_ARREARS', 'ACTIVE', 'CLOSED'), al.activeLoanID DESC
+");
+$activeLoansStmt->execute([':mid' => $member['MemberID']]);
+$memberActiveLoans = $activeLoansStmt->fetchAll();
+
+// View 4 Data: Repayment Ledger & Waterfall History
+$ledgerStmt = $pdo->prepare("
+    SELECT lt.*, al.loanStatus, al.originalPrincipal, la.loanType
+    FROM loan_transaction lt
+    JOIN active_loan al ON al.activeLoanID = lt.activeLoanID
+    JOIN loan_application la ON la.loanApplicationID = al.loanApplicationID
+    WHERE al.memberID = :mid
+    ORDER BY lt.transactionID DESC
+");
+$ledgerStmt->execute([':mid' => $member['MemberID']]);
+$memberLedger = $ledgerStmt->fetchAll();
 
 // Paginated Transactions (for Record tab)
 $recordLimit = 10;
@@ -166,26 +149,19 @@ $recordOffset = ($recordPage - 1) * $recordLimit;
 $transactionIdSearch = trim($_GET['transaction_id'] ?? '');
 $dateFrom = trim($_GET['date_from'] ?? '');
 $dateTo = trim($_GET['date_to'] ?? '');
-if ($dateFrom !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) {
-    $dateFrom = '';
-}
-if ($dateTo !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) {
-    $dateTo = '';
-}
+if ($dateFrom !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom)) { $dateFrom = ''; }
+if ($dateTo !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)) { $dateTo = ''; }
 
-$recordWhere = "WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal')";
+$recordWhere = "WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal', 'loan_repayment')";
 $recordParams = [':member_id' => $member['MemberID']];
-
 if ($transactionIdSearch !== '') {
     $recordWhere .= " AND TranID LIKE :transaction_id";
     $recordParams[':transaction_id'] = '%' . $transactionIdSearch . '%';
 }
-
 if ($dateFrom !== '') {
     $recordWhere .= " AND DATE(COALESCE(TranTime, CreatedAt)) >= :date_from";
     $recordParams[':date_from'] = $dateFrom;
 }
-
 if ($dateTo !== '') {
     $recordWhere .= " AND DATE(COALESCE(TranTime, CreatedAt)) <= :date_to";
     $recordParams[':date_to'] = $dateTo;
@@ -206,69 +182,11 @@ $recordsStmt->bindValue(':limit', $recordLimit, PDO::PARAM_INT);
 $recordsStmt->bindValue(':offset', $recordOffset, PDO::PARAM_INT);
 $recordsStmt->execute();
 $paginatedTransactions = $recordsStmt->fetchAll();
-$recordQueryParams = ['tab' => 'record'];
-if ($transactionIdSearch !== '') {
-    $recordQueryParams['transaction_id'] = $transactionIdSearch;
-}
-if ($dateFrom !== '') {
-    $recordQueryParams['date_from'] = $dateFrom;
-}
-if ($dateTo !== '') {
-    $recordQueryParams['date_to'] = $dateTo;
-}
 
-$loans = [
-    [
-        'title' => 'EMERGENCY LOAN',
-        'img' => '../assets/img/emergency _loans.jfif',
-        'desc' => 'Members may access up to two emergency facilities at a time, with support of up to KES 300,000 repayable within 12 months.'
-    ],
-    [
-        'title' => 'ELIMU LOAN',
-        'img' => '../assets/img/junior.jfif',
-        'desc' => 'Education financing of up to KES 1,000,000, priced at 1% per month on a reducing balance.'
-    ],
-    [
-        'title' => 'CAR LOAN',
-        'img' => '../assets/img/financial_image.jfif',
-        'desc' => 'Vehicle financing of up to KES 3,000,000, charged at 1% per month and repayable over a maximum of 48 months.'
-    ],
-    [
-        'title' => 'KUJENGA LOAN',
-        'img' => '../assets/img/development_loan.jfif',
-        'desc' => 'Construction and building support of up to KES 4,000,000, or an amount guided by the collateral valuation, at 1.042% per month.'
-    ],
-    [
-        'title' => 'PRINCIPAL LOAN',
-        'img' => '../assets/img/Investment.jfif',
-        'desc' => 'A main credit facility with a limit of up to KES 3,000,000 or three times member deposits, repayable within 48 months.'
-    ],
-    [
-        'title' => 'KARIBU LOAN',
-        'img' => '../assets/img/karibu_loan.jfif',
-        'desc' => 'A member-friendly facility for building your financial journey through flexible terms and competitive SACCO lending support.'
-    ],
-    [
-        'title' => 'BIASHARA LOAN',
-        'img' => '../assets/img/member_centred.jfif',
-        'desc' => 'Business financing designed to support enterprise needs with affordable access and a practical repayment plan.'
-    ],
-    [
-        'title' => 'DEVELOPMENT LOAN',
-        'img' => '../assets/img/development_loan.jfif',
-        'desc' => 'Long-term development financing for major projects, with a maximum loan limit of KES 10,000,000.'
-    ],
-    [
-        'title' => 'CHAPA LOAN',
-        'img' => '../assets/img/salary_in_advance.jfif',
-        'desc' => 'A flexible credit option that can provide access to up to 70% of a member\'s free savings.'
-    ],
-    [
-        'title' => 'NUNUA SIMU LOAN',
-        'img' => '../assets/img/about.jpg',
-        'desc' => 'A convenient mobile loan option of up to KES 20,000, available without guarantorship once registered.'
-    ]
-];
+$recordQueryParams = ['tab' => 'record'];
+if ($transactionIdSearch !== '') { $recordQueryParams['transaction_id'] = $transactionIdSearch; }
+if ($dateFrom !== '') { $recordQueryParams['date_from'] = $dateFrom; }
+if ($dateTo !== '') { $recordQueryParams['date_to'] = $dateTo; }
 
 function e($value): string
 {
@@ -285,19 +203,19 @@ function dashboardUrl(array $params): string
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard | Mashirikiano SACCO</title>
+  <title>Member Portal | Mashirikiano SACCO</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
   <link href="../assets/css/main.css" rel="stylesheet">
   <style>
     body { background: #eef4f0; color: #1d2b26; }
-    .member-shell { max-width: 1180px; }
+    .member-shell { max-width: 1200px; }
     .portal-header { background: #087a43; color: #fff; padding: 14px 0 10px; }
     .member-brand { display: flex; align-items: center; gap: 12px; }
     .member-brand img { background: #fff; border-radius: 50%; padding: 4px; }
-    .member-top-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; background: #fff; border-bottom: 1px solid #dce8e1; box-shadow: 0 8px 24px rgba(28, 77, 51, .08); position: sticky; top: 0; z-index: 1030; }
-    .member-top-nav a { color: #5e7068; font-weight: 700; text-decoration: none; padding: 14px 0 12px; border-bottom: 3px solid transparent; }
+    .member-top-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; background: #fff; border-bottom: 1px solid #dce8e1; box-shadow: 0 8px 24px rgba(28, 77, 51, .08); position: sticky; top: 0; z-index: 1030; }
+    .member-top-nav a { color: #5e7068; font-weight: 700; text-decoration: none; padding: 14px 4px 12px; border-bottom: 3px solid transparent; font-size: 0.95rem; }
     .member-top-nav a:hover, .member-top-nav a.active { color: #087a43; border-bottom-color: #087a43; }
     .member-hero { background: linear-gradient(135deg, #087a43, #0a5534); color: #fff; border-radius: 8px; padding: 22px; box-shadow: 0 18px 40px rgba(8, 122, 67, .18); }
     .member-profile-summary { display: flex; align-items: center; gap: 18px; }
@@ -308,7 +226,7 @@ function dashboardUrl(array $params): string
     .profile-detail { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 12px; min-width: 0; }
     .profile-detail .label { display: block; color: rgba(255,255,255,.72); font-size: .76rem; font-weight: 700; text-transform: uppercase; }
     .profile-detail .value { display: block; color: #fff; font-weight: 700; overflow-wrap: anywhere; }
-    .metric { border: 0; border-radius: 8px; box-shadow: 0 10px 30px rgba(20, 55, 38, .08); }
+    .metric { border: 0; border-radius: 8px; box-shadow: 0 10px 30px rgba(20, 55, 38, .08); background: #fff; }
     .metric-icon { width: 38px; height: 38px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #e7f5ed; color: #087a43; }
     .wallet-akiba { color: #e47001 !important; }
     .wallet-ushirika { color: #489a12 !important; }
@@ -323,19 +241,15 @@ function dashboardUrl(array $params): string
     .remarks-link:hover { text-decoration: underline; }
     .loan-card {
       border: 0;
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.05);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.05);
+      background: #fff;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
       overflow: hidden;
     }
     .loan-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 15px 35px rgba(11, 59, 102, 0.15);
-    }
-    .loan-card-img {
-      height: 180px;
-      object-fit: cover;
-      width: 100%;
+      transform: translateY(-4px);
+      box-shadow: 0 14px 32px rgba(8, 122, 67, 0.12);
     }
     .apply-btn {
       background: #087a43;
@@ -348,19 +262,109 @@ function dashboardUrl(array $params): string
       background: #f4a621;
       color: #000;
     }
-    .table thead th { color: #617083; font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; }
-    @media (max-width: 767px) {
-      .member-top-nav { gap: 14px; overflow-x: auto; justify-content: flex-start; padding: 0 14px; flex-wrap: nowrap; }
-      .member-top-nav a { white-space: nowrap; }
-      .member-hero { padding: 18px; }
-      .table { min-width: 760px; }
+
+    /* Stepper Styling for View 2 */
+    .stepper-container {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      margin: 18px 0;
     }
-    @media (max-width: 480px) {
-      .member-profile-summary { align-items: flex-start; gap: 12px; }
-      .member-profile-photo { width: 68px; height: 68px; flex-basis: 68px; }
-      .member-profile-name { font-size: 1.25rem; }
-      .member-profile-id { font-size: .95rem; }
-      .profile-detail-grid { grid-template-columns: 1fr; }
+    .stepper-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      flex: 1;
+      text-align: center;
+    }
+    .stepper-step::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      left: -50%;
+      width: 100%;
+      height: 3px;
+      background: #e2e8f0;
+      z-index: 1;
+    }
+    .stepper-step:first-child::before { display: none; }
+    .stepper-step.completed::before { background: #28a745; }
+    .stepper-step.rejected::before { background: #dc3545; }
+    .stepper-badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e2e8f0;
+      color: #64748b;
+      font-weight: 700;
+      position: relative;
+      z-index: 2;
+      margin-bottom: 6px;
+    }
+    .stepper-step.completed .stepper-badge { background: #28a745; color: #fff; }
+    .stepper-step.active .stepper-badge { background: #f4a621; color: #000; box-shadow: 0 0 0 4px rgba(244,166,33,0.25); }
+    .stepper-step.rejected .stepper-badge { background: #dc3545; color: #fff; }
+    .stepper-label { font-size: 0.82rem; font-weight: 600; color: #475569; }
+
+    /* M-Pesa Instruction Box */
+    .mpesa-instruction-box {
+      background: linear-gradient(135deg, #f7fdf9, #ebf8f0);
+      border: 1px solid #b7e4c7;
+      border-left: 5px solid #28a745;
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .account-code-display {
+      font-family: monospace;
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: #0b3b66;
+      background: #fff;
+      padding: 6px 14px;
+      border: 2px dashed #087a43;
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    /* Financial Breakdown Grid */
+    .fin-bucket {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    .fin-bucket .label { font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; }
+    .fin-bucket .amount { font-size: 1.35rem; font-weight: 800; color: #0b3b66; margin-top: 4px; }
+    .fin-bucket.highlight {
+      background: #e7f5ed;
+      border-color: #087a43;
+    }
+    .fin-bucket.highlight .amount { color: #087a43; }
+
+    /* Spinner Animation */
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spin-anim { animation: spin 1s linear infinite; display: inline-block; }
+
+    .status-pill {
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+    .status-pill.ACTIVE { background: #d4edda; color: #155724; }
+    .status-pill.IN_ARREARS { background: #f8d7da; color: #721c24; }
+    .status-pill.CLOSED { background: #e2e3e5; color: #383d41; }
+
+    @media (max-width: 767px) {
+      .member-top-nav { gap: 10px; overflow-x: auto; justify-content: flex-start; padding: 0 10px; flex-wrap: nowrap; }
+      .member-top-nav a { white-space: nowrap; font-size: 0.88rem; }
     }
   </style>
 </head>
@@ -378,10 +382,13 @@ function dashboardUrl(array $params): string
     </div>
   </header>
 
+  <!-- NAVIGATION TABS -->
   <nav class="member-top-nav" aria-label="Member navigation">
     <a class="<?= $activeTab === 'dashboard' ? 'active' : '' ?>" href="?tab=dashboard">Dashboard</a>
-    <a class="<?= $activeTab === 'loan' ? 'active' : '' ?>" href="?tab=loan">Loans</a>
-    <a class="<?= $activeTab === 'applications' ? 'active' : '' ?>" href="?tab=applications">My Applications</a>
+    <a class="<?= $activeTab === 'catalog' ? 'active' : '' ?>" href="?tab=catalog">Available Loans</a>
+    <a class="<?= $activeTab === 'progress' ? 'active' : '' ?>" href="?tab=progress">Loan Progress</a>
+    <a class="<?= $activeTab === 'active' ? 'active' : '' ?>" href="?tab=active">Active Loans</a>
+    <a class="<?= $activeTab === 'ledger' ? 'active' : '' ?>" href="?tab=ledger">Repayment Ledger</a>
     <a class="<?= $activeTab === 'record' ? 'active' : '' ?>" href="?tab=record">Transactions</a>
   </nav>
 
@@ -393,10 +400,11 @@ function dashboardUrl(array $params): string
       </div>
     <?php endif; ?>
 
-    <!-- Tab Content -->
     <div class="tab-content" id="dashboardTabsContent">
       
-      <!-- DASHBOARD TAB -->
+      <!-- ============================================================== -->
+      <!-- TAB 1: DASHBOARD OVERVIEW -->
+      <!-- ============================================================== -->
       <?php if ($activeTab === 'dashboard'): ?>
         <section class="member-hero mb-4">
           <div class="member-profile-summary">
@@ -475,9 +483,9 @@ function dashboardUrl(array $params): string
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon danger"><i class="bi bi-cash-stack"></i></span>
                 <div>
-                  <div class="text-muted small text-uppercase fw-bold">Total Loan Balance</div>
-                  <div class="h4 fw-bold mb-0">KES <?= number_format($totalLoanBalance, 2) ?></div>
-                  <div class="small text-muted" style="font-size:0.75rem;">Active approved borrowing facilities</div>
+                  <div class="text-muted small text-uppercase fw-bold">Active Total Loan Balance</div>
+                  <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalLoanBalance, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Outstanding principal & daily accrued interest</div>
                 </div>
               </div>
             </div>
@@ -496,17 +504,18 @@ function dashboardUrl(array $params): string
                   <?php
                     $isWithdrawal = $transaction['TransactionType'] === 'withdrawal';
                     $isTransfer = ($transaction['TransactionCategory'] ?? '') === 'credit_transfer';
+                    $isLoanRepay = $transaction['TransactionType'] === 'loan_repayment';
                   ?>
                   <div class="recent-row">
-                    <span class="recent-icon <?= $isWithdrawal ? 'danger' : ($isTransfer ? 'primary' : '') ?>">
-                      <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : 'bi-arrow-down-left') ?>"></i>
+                    <span class="recent-icon <?= $isWithdrawal ? 'danger' : ($isTransfer ? 'primary' : ($isLoanRepay ? 'warning' : '')) ?>">
+                      <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : ($isLoanRepay ? 'bi-arrow-clockwise text-warning' : 'bi-arrow-down-left')) ?>"></i>
                     </span>
                     <div class="flex-grow-1">
                       <div class="fw-bold"><?= e($transaction['TranID']) ?></div>
-                      <div class="text-muted small"><?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : 'Contribution') ?> &middot; <?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['Description'] ?: $transaction['MSISDN']) ?></div>
+                      <div class="text-muted small"><?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : ($isLoanRepay ? 'Loan Repayment' : 'Contribution')) ?> &middot; <?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['Description'] ?: $transaction['MSISDN']) ?></div>
                     </div>
-                    <div class="fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : 'text-success') ?> text-end">
-                      <?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : '+') ?> KES <?= number_format((float)$transaction['Amount'], 2) ?>
+                    <div class="fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?> text-end">
+                      <?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : ($isLoanRepay ? '↺' : '+')) ?> KES <?= number_format((float)$transaction['Amount'], 2) ?>
                     </div>
                   </div>
                 <?php endforeach; ?>
@@ -519,29 +528,115 @@ function dashboardUrl(array $params): string
         </div>
       <?php endif; ?>
 
-      <!-- LOAN TAB -->
-      <?php if ($activeTab === 'loan'): ?>
-        <!-- Loan Services Catalog -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-          <h1 class="h4 fw-bold mb-0">Available Loan Services</h1>
-          <a class="remarks-link" href="?tab=applications">My Applications</a>
+      <!-- ============================================================== -->
+      <!-- VIEW 1: AVAILABLE LOANS CATALOG (/member/loans/catalog) -->
+      <!-- ============================================================== -->
+      <?php if ($activeTab === 'catalog'): ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+          <div>
+            <h1 class="h4 fw-bold mb-1">Available Loan Products Catalog</h1>
+            <p class="text-muted small mb-0">Select a credit facility. Eligibility is verified automatically against your Akiba and Ushirika wallet balances.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <a class="btn btn-outline-success btn-sm fw-semibold" href="?tab=progress">
+              <i class="bi bi-clock-history me-1"></i> Loan Progress
+            </a>
+            <a class="btn btn-outline-primary btn-sm fw-semibold" href="?tab=active">
+              <i class="bi bi-cash-coin me-1"></i> Active Loans
+            </a>
+          </div>
         </div>
+
+        <!-- Wallet Qualification Info Strip -->
+        <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 p-3 rounded-3">
+          <div class="d-flex align-items-center gap-3">
+            <span class="fs-4 text-success"><i class="bi bi-shield-check"></i></span>
+            <div>
+              <div class="fw-bold text-dark">Your Current Savings Balances</div>
+              <div class="small text-muted">Akiba: <strong>KES <?= number_format($akibaWallet, 2) ?></strong> &middot; Ushirika Shares: <strong>KES <?= number_format($totalUshirika, 2) ?></strong></div>
+            </div>
+          </div>
+          <span class="badge bg-primary px-3 py-2">Real-Time Qualification</span>
+        </div>
+
         <div class="row g-4">
-          <?php foreach ($loans as $index => $loan): ?>
+          <?php foreach ($catalogProducts as $prod): ?>
+            <?php 
+              $pId = (int)$prod['loanID'];
+              $elig = $productEligibility[$pId] ?? ['is_eligible' => false, 'reason' => 'Checking...'];
+              $isEligible = $elig['is_eligible'];
+              $isCustom = (strtoupper(trim($prod['paymentPeriod'])) === 'CUSTOM');
+              $durationDays = 30;
+              if (preg_match('/(\d+)/', $prod['paymentPeriod'], $matches)) {
+                  $durationDays = (int)$matches[1];
+              }
+              $predefinedReturnDate = date('Y-m-d', strtotime("+$durationDays days"));
+              $customMinDate = date('Y-m-d', strtotime('+121 days'));
+            ?>
             <div class="col-md-6 col-lg-4">
-              <div class="card loan-card h-100">
-                <img src="<?= e($loan['img']) ?>" class="card-img-top loan-card-img" alt="<?= e($loan['title']) ?>">
-                <div class="card-body d-flex flex-column">
-                  <h5 class="card-title fw-bold text-primary mb-2" style="font-size: 1.1rem;"><?= e($loan['title']) ?></h5>
-                  <p class="card-text text-muted small flex-grow-1"><?= e($loan['desc']) ?></p>
+              <div class="card loan-card h-100 d-flex flex-column">
+                <div class="card-body p-4 d-flex flex-column">
+                  <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                    <h5 class="card-title fw-bold text-primary mb-0" style="font-size: 1.15rem;">
+                      <?= e($prod['loanType']) ?>
+                    </h5>
+                    <?php if ($isEligible): ?>
+                      <span class="badge bg-success" style="font-size: 0.75rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i> Eligible
+                      </span>
+                    <?php else: ?>
+                      <span class="badge bg-danger" style="font-size: 0.75rem;">
+                        <i class="bi bi-x-circle-fill me-1"></i> Under-Qualified
+                      </span>
+                    <?php endif; ?>
+                  </div>
+
+                  <p class="card-text text-muted small flex-grow-1 mb-3">
+                    <?= e($prod['loanDescription'] ?: 'Affordable SACCO financing tailored to empower members.') ?>
+                  </p>
+
+                  <div class="bg-light p-3 rounded-3 mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                      <span class="text-muted">Maximum Limit:</span>
+                      <strong class="text-success">KES <?= number_format((float)$prod['maxAmount'], 2) ?></strong>
+                    </div>
+                    <div class="d-flex justify-content-between small mb-1">
+                      <span class="text-muted">Annual Interest:</span>
+                      <strong class="text-dark"><?= number_format((float)$prod['loanInterest'] * 100, 2) ?>% (<?= e($prod['interestType']) ?>)</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small mb-1">
+                      <span class="text-muted">Period Mode:</span>
+                      <strong class="text-primary"><?= e($prod['paymentPeriod']) ?></strong>
+                    </div>
+                    <div class="border-top pt-2 mt-2">
+                      <div class="d-flex justify-content-between small text-muted">
+                        <span>Min. Akiba: KES <?= number_format((float)$prod['loanQualification_AkibaAmount'], 2) ?></span>
+                        <span>Min. Ushirika: KES <?= number_format((float)$prod['loanQualification_UshirikaAmount'], 2) ?></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <?php if (!$isEligible): ?>
+                    <div class="alert alert-warning py-1 px-2 small mb-3 text-center" style="font-size: 0.75rem;">
+                      <i class="bi bi-exclamation-triangle me-1"></i> <?= e($elig['reason']) ?>
+                    </div>
+                  <?php endif; ?>
+
                   <button 
                     type="button" 
-                    class="btn apply-btn w-100 py-2 mt-3 rounded-3" 
+                    class="btn <?= $isEligible ? 'apply-btn' : 'btn-secondary opacity-75' ?> w-100 py-2 rounded-3 fw-bold" 
+                    <?= $isEligible ? '' : 'disabled' ?>
                     data-bs-toggle="modal" 
-                    data-bs-target="#applyLoanModal" 
-                    data-loan-title="<?= e($loan['title']) ?>"
+                    data-bs-target="#applyLoanModal"
+                    data-loan-id="<?= $pId ?>"
+                    data-loan-title="<?= e($prod['loanType']) ?>"
+                    data-loan-max="<?= (float)$prod['maxAmount'] ?>"
+                    data-loan-period-mode="<?= $isCustom ? 'custom' : 'predefined' ?>"
+                    data-predefined-date="<?= e($predefinedReturnDate) ?>"
+                    data-custom-min-date="<?= e($customMinDate) ?>"
+                    data-loan-interest="<?= number_format((float)$prod['loanInterest'] * 100, 2) ?>% (<?= e($prod['interestType']) ?>)"
                   >
-                    Apply Now
+                    <?= $isEligible ? 'Apply Now' : 'Requires More Savings' ?>
                   </button>
                 </div>
               </div>
@@ -549,36 +644,58 @@ function dashboardUrl(array $params): string
           <?php endforeach; ?>
         </div>
 
-        <!-- Apply Loan Modal -->
+        <!-- APPLICATION MODAL -->
         <div class="modal fade" id="applyLoanModal" tabindex="-1" aria-labelledby="applyLoanModalLabel" aria-hidden="true">
           <div class="modal-dialog">
             <div class="modal-content border-0 shadow-lg">
-              <form method="post" action="?tab=loan">
+              <form method="post" action="dashboard.php?tab=catalog" id="applyLoanForm">
                 <input type="hidden" name="apply_loan" value="1">
-                <div class="modal-header bg-primary text-white border-0">
-                  <h5 class="modal-title fw-bold" id="applyLoanModalLabel">Loan Application</h5>
+                <input type="hidden" name="loan_id" id="modalLoanId" value="">
+
+                <div class="modal-header bg-success text-white border-0">
+                  <h5 class="modal-title fw-bold" id="applyLoanModalLabel">
+                    <i class="bi bi-file-earmark-text me-1"></i> Member Loan Application
+                  </h5>
                   <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+
                 <div class="modal-body p-4">
                   <div class="mb-3">
-                    <label for="modalLoanType" class="form-label fw-bold">Loan Service</label>
-                    <input type="text" class="form-control bg-light fw-bold text-primary" id="modalLoanType" name="loan_type" readonly>
+                    <label class="form-label fw-bold">Loan Facility</label>
+                    <input type="text" class="form-control bg-light fw-bold text-primary" id="modalLoanTitle" readonly>
+                    <div class="form-text" id="modalInterestHelp"></div>
                   </div>
+
                   <div class="mb-3">
-                    <label for="modalAmount" class="form-label fw-bold">Requested Amount (KES)</label>
-                    <input type="number" class="form-control" id="modalAmount" name="amount" min="1" step="0.01" placeholder="e.g. 50000" required>
+                    <label for="modalAmount" class="form-label fw-bold">Requested Amount (KES) <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <span class="input-group-text">KES</span>
+                      <input type="number" class="form-control" id="modalAmount" name="amount" min="1" step="0.01" placeholder="e.g. 50000" required>
+                    </div>
+                    <div class="form-text" id="modalMaxAmountHelp">Maximum borrowing limit: KES 0.00</div>
                   </div>
-                  <div class="mb-3">
-                    <label for="modalReturnDate" class="form-label fw-bold">Expected Return Date</label>
-                    <input type="date" class="form-control" id="modalReturnDate" name="return_date" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required>
+
+                  <!-- Return Date Field -->
+                  <div class="mb-3" id="predefinedDateWrapper">
+                    <label class="form-label fw-bold">Scheduled Return Date (Predefined)</label>
+                    <input type="date" class="form-control bg-light" id="modalPredefinedReturnDate" readonly>
+                    <div class="form-text">Auto-calculated clearance target according to loan term.</div>
                   </div>
+
+                  <div class="mb-3" id="customDateWrapper" style="display: none;">
+                    <label for="modalCustomReturnDate" class="form-label fw-bold">Custom Clearance Target <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="modalCustomReturnDate">
+                    <div class="form-text text-primary">Strict policy: Custom duration must be at least 121 days (> 120 days from today).</div>
+                  </div>
+
                   <div class="alert alert-info small py-2 mb-0">
-                    A confirmation SMS will be sent to your registered phone: <strong><?= e($member['PrimaryNumber']) ?></strong>.
+                    <i class="bi bi-bell me-1"></i> A confirmation SMS will be dispatched to your phone <strong><?= e($member['PrimaryNumber']) ?></strong> upon submission and review.
                   </div>
                 </div>
+
                 <div class="modal-footer border-0 p-3">
                   <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Cancel</button>
-                  <button type="submit" class="btn apply-btn px-4">Submit Application</button>
+                  <button type="submit" class="btn apply-btn px-4 fw-bold">Submit Application</button>
                 </div>
               </form>
             </div>
@@ -586,71 +703,369 @@ function dashboardUrl(array $params): string
         </div>
       <?php endif; ?>
 
-      <!-- APPLICATIONS TAB -->
-      <?php if ($activeTab === 'applications'): ?>
-        <section class="card metric">
-          <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-              <div>
-                <h1 class="h4 fw-bold mb-1">My Applications</h1>
-                <div class="text-muted small">All submitted loan requests and feedback from the SACCO team.</div>
+      <!-- ============================================================== -->
+      <!-- VIEW 2: LOAN PROGRESS & APPLICATIONS (/member/loans/progress) -->
+      <!-- ============================================================== -->
+      <?php if ($activeTab === 'progress'): ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+          <div>
+            <h1 class="h4 fw-bold mb-1">Loan Progress Tracker</h1>
+            <p class="text-muted small mb-0">Track real-time status transitions, review decisions, and admin remarks for your submitted loan requests.</p>
+          </div>
+          <a href="?tab=catalog" class="btn apply-btn fw-bold">
+            <i class="bi bi-plus-circle me-1"></i> Apply for a Loan
+          </a>
+        </div>
+
+        <?php if (!empty($memberApplications)): ?>
+          <div class="row g-4">
+            <?php foreach ($memberApplications as $app): ?>
+              <?php
+                $status = strtoupper((string)$app['status']);
+                $isPending = ($status === 'PENDING');
+                $isApproved = ($status === 'APPROVED');
+                $isRejected = ($status === 'REJECTED');
+              ?>
+              <div class="col-12">
+                <div class="card metric p-4">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div>
+                      <h5 class="fw-bold text-dark mb-1">
+                        <?= e($app['loanType']) ?> 
+                        <span class="text-muted small">(App #<?= (int)$app['loanApplicationID'] ?>)</span>
+                      </h5>
+                      <span class="text-muted small">Submitted on: <?= e($app['createdAt']) ?> &middot; Requested Target: <?= e($app['returndate']) ?></span>
+                    </div>
+                    <div class="text-end">
+                      <div class="h4 fw-bold text-success mb-0">KES <?= number_format((float)$app['amount'], 2) ?></div>
+                      <span class="badge <?= $isApproved ? 'bg-success' : ($isRejected ? 'bg-danger' : 'bg-warning text-dark') ?> text-uppercase">
+                        <?= e($app['status']) ?>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Visual Status Stepper -->
+                  <div class="stepper-container">
+                    <!-- Step 1: Submitted -->
+                    <div class="stepper-step completed">
+                      <div class="stepper-badge"><i class="bi bi-check-lg"></i></div>
+                      <div class="stepper-label text-success">Submitted</div>
+                      <small class="text-muted" style="font-size:0.7rem;"><?= date('d M Y', strtotime($app['createdAt'])) ?></small>
+                    </div>
+
+                    <!-- Step 2: Under Review -->
+                    <div class="stepper-step <?= ($isPending ? 'active' : ($isApproved ? 'completed' : 'rejected')) ?>">
+                      <div class="stepper-badge">
+                        <?php if ($isPending): ?>
+                          <i class="bi bi-hourglass-split"></i>
+                        <?php elseif ($isApproved): ?>
+                          <i class="bi bi-check-lg"></i>
+                        <?php else: ?>
+                          <i class="bi bi-x-lg"></i>
+                        <?php endif; ?>
+                      </div>
+                      <div class="stepper-label <?= $isPending ? 'text-warning fw-bold' : ($isApproved ? 'text-success' : 'text-danger') ?>">Under Review</div>
+                      <small class="text-muted" style="font-size:0.7rem;"><?= $isPending ? 'In Progress' : 'Completed' ?></small>
+                    </div>
+
+                    <!-- Step 3: Approved / Rejected -->
+                    <div class="stepper-step <?= $isApproved ? 'completed' : ($isRejected ? 'rejected' : '') ?>">
+                      <div class="stepper-badge">
+                        <?php if ($isApproved): ?>
+                          <i class="bi bi-check-lg"></i>
+                        <?php elseif ($isRejected): ?>
+                          <i class="bi bi-x-lg"></i>
+                        <?php else: ?>
+                          3
+                        <?php endif; ?>
+                      </div>
+                      <div class="stepper-label <?= $isApproved ? 'text-success fw-bold' : ($isRejected ? 'text-danger fw-bold' : 'text-muted') ?>">
+                        <?= $isRejected ? 'Rejected' : 'Approved' ?>
+                      </div>
+                      <small class="text-muted" style="font-size:0.7rem;">
+                        <?= $isApproved ? 'Disbursed' : ($isRejected ? 'Declined' : 'Pending Review') ?>
+                      </small>
+                    </div>
+                  </div>
+
+                  <!-- Rejection Feedback Alert -->
+                  <?php if ($isRejected): ?>
+                    <div class="alert alert-danger mb-0 mt-2 p-3">
+                      <div class="fw-bold mb-1"><i class="bi bi-exclamation-octagon me-1"></i> Application Not Approved</div>
+                      <p class="mb-0 small"><strong>Reason from Admin:</strong> <?= e($app['rejection'] ?: 'Application does not meet required savings or risk thresholds.') ?></p>
+                    </div>
+                  <?php endif; ?>
+
+                  <!-- Approval Feedback Banner -->
+                  <?php if ($isApproved): ?>
+                    <div class="alert alert-success d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0 mt-2 p-3">
+                      <div>
+                        <div class="fw-bold"><i class="bi bi-check-circle me-1"></i> Approved & Active in Ledger</div>
+                        <div class="small">M-Pesa Repayment Account Code: <strong class="fs-6 text-primary"><?= e($app['repayment_account']) ?></strong></div>
+                      </div>
+                      <a href="?tab=active" class="btn btn-sm btn-success fw-bold">
+                        <i class="bi bi-eye me-1"></i> View Live Loan Dashboard
+                      </a>
+                    </div>
+                  <?php endif; ?>
+
+                </div>
               </div>
-              <a href="?tab=loan" class="btn apply-btn">Apply for a Loan</a>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <div class="card metric p-5 text-center">
+            <i class="bi bi-file-earmark-text fs-1 text-muted mb-3"></i>
+            <h5 class="fw-bold text-dark">No Loan Applications Found</h5>
+            <p class="text-muted">You have not submitted any loan applications yet. Explore our loan products catalog to apply.</p>
+            <div>
+              <a href="?tab=catalog" class="btn apply-btn px-4 fw-bold">Explore Loan Catalog</a>
             </div>
+          </div>
+        <?php endif; ?>
+      <?php endif; ?>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 3: APPROVED & ACTIVE LOANS (/member/loans/active) -->
+      <!-- ============================================================== -->
+      <?php if ($activeTab === 'active'): ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+          <div>
+            <h1 class="h4 fw-bold mb-1">Approved & Active Loans</h1>
+            <p class="text-muted small mb-0">Live operational ledger, real-time daily interest calculations, and M-Pesa repayment routing.</p>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="?tab=catalog" class="btn btn-outline-success btn-sm fw-semibold">
+              <i class="bi bi-plus-circle me-1"></i> Apply Another Loan
+            </a>
+            <a href="?tab=ledger" class="btn btn-outline-primary btn-sm fw-semibold">
+              <i class="bi bi-journal-text me-1"></i> Repayment Ledger
+            </a>
+          </div>
+        </div>
+
+        <?php if (!empty($memberActiveLoans)): ?>
+          <div class="row g-4">
+            <?php foreach ($memberActiveLoans as $act): ?>
+              <?php
+                $pBal = (float)$act['principalBalance'];
+                $accInt = (float)$act['accruedInterest'];
+                $billInt = (float)$act['billedUnpaidInterest'];
+                $penBal = (float)$act['penaltyBalance'];
+                $totalPayoff = round($pBal + $accInt + $billInt + $penBal, 2);
+                $isArrears = ($act['loanStatus'] === 'IN_ARREARS');
+              ?>
+              <div class="col-12">
+                <div class="card metric p-4">
+                  <!-- Header Bar -->
+                  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 pb-3 mb-3 border-bottom">
+                    <div class="d-flex align-items-center gap-3">
+                      <h4 class="fw-bold text-dark mb-0"><?= e($act['loanType']) ?></h4>
+                      <span class="status-pill <?= e($act['loanStatus']) ?>">
+                        <?= e($act['loanStatus']) ?>
+                      </span>
+                    </div>
+
+                    <!-- Prominent "Refresh Loan State" button with spinner -->
+                    <form method="post" action="dashboard.php?tab=active" id="refreshForm_<?= $act['activeLoanID'] ?>" class="d-inline">
+                      <input type="hidden" name="refresh_loan_state" value="1">
+                      <input type="hidden" name="active_loan_id" value="<?= (int)$act['activeLoanID'] ?>">
+                      <button type="submit" class="btn btn-primary fw-bold shadow-sm" onclick="this.querySelector('i').classList.add('spin-anim');">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh Loan State
+                      </button>
+                    </form>
+                  </div>
+
+                  <!-- M-Pesa Payment Instruction Box -->
+                  <div class="mpesa-instruction-box mb-4">
+                    <div class="row g-3 align-items-center">
+                      <div class="col-lg-7">
+                        <div class="fw-bold text-success fs-6 mb-1">
+                          <i class="bi bi-phone me-1"></i> M-Pesa C2B Paybill Repayment Instructions
+                        </div>
+                        <p class="small text-muted mb-2">
+                          1. Open Safaricom M-Pesa &rarr; Lipa na M-Pesa &rarr; <strong>Paybill</strong><br>
+                          2. Business Number: <strong><?= e(env('MPESA_SHORTCODE', '4085444')) ?></strong><br>
+                          3. Account Number: Enter your unique 5-character routing code below:
+                        </p>
+                      </div>
+                      <div class="col-lg-5 text-lg-end">
+                        <div class="d-inline-flex flex-column align-items-lg-end align-items-start gap-2">
+                          <div class="d-flex align-items-center gap-2">
+                            <span class="account-code-display"><?= e($act['repayment_account']) ?></span>
+                            <button type="button" class="btn btn-outline-success fw-bold" onclick="copyRepayCode('<?= e($act['repayment_account']) ?>')">
+                              <i class="bi bi-clipboard me-1"></i> Copy
+                            </button>
+                          </div>
+                          <small class="text-muted">Unique loan account code</small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Transparent Financial Breakdown Cards -->
+                  <div class="row g-3 mb-4">
+                    <!-- Current Principal Balance -->
+                    <div class="col-6 col-lg-3">
+                      <div class="fin-bucket">
+                        <div class="label">Current Principal</div>
+                        <div class="amount">KES <?= number_format($pBal, 2) ?></div>
+                        <small class="text-muted">Orig: <?= number_format((float)$act['originalPrincipal'], 2) ?></small>
+                      </div>
+                    </div>
+
+                    <!-- Current Accrued Interest (Updates live when Refresh is clicked) -->
+                    <div class="col-6 col-lg-3">
+                      <div class="fin-bucket">
+                        <div class="label">Accrued Interest (Daily)</div>
+                        <div class="amount text-warning">KES <?= number_format($accInt, 2) ?></div>
+                        <small class="text-muted">Actual/365 rolling interest</small>
+                      </div>
+                    </div>
+
+                    <!-- Overdue Billed Interest -->
+                    <div class="col-6 col-lg-3">
+                      <div class="fin-bucket">
+                        <div class="label">Overdue Billed Interest</div>
+                        <div class="amount text-danger">KES <?= number_format($billInt, 2) ?></div>
+                        <small class="text-muted">Missed monthly milestones</small>
+                      </div>
+                    </div>
+
+                    <!-- Penalties -->
+                    <div class="col-6 col-lg-3">
+                      <div class="fin-bucket">
+                        <div class="label">Penalties</div>
+                        <div class="amount text-danger">KES <?= number_format($penBal, 2) ?></div>
+                        <small class="text-muted">Late clearance default fees</small>
+                      </div>
+                    </div>
+
+                    <!-- Total Payoff Quote Today (Full Width Banner) -->
+                    <div class="col-12">
+                      <div class="fin-bucket highlight p-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div class="text-start">
+                          <div class="label text-success">Total Payoff Quote Today</div>
+                          <div class="small text-muted">Sum of remaining Principal, Daily Accrued Interest, Billed Interest, and Late Penalties</div>
+                        </div>
+                        <div class="text-end">
+                          <div class="amount fs-2 text-success">KES <?= number_format($totalPayoff, 2) ?></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Timeline Metadata Footer -->
+                  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-3 border-top text-muted small">
+                    <div>
+                      <span>Disbursed On: <strong><?= e($act['disbursementDate']) ?></strong></span> &middot; 
+                      <span>Due Date: <strong class="<?= $isArrears ? 'text-danger' : '' ?>"><?= e($act['returnDate']) ?></strong></span>
+                    </div>
+                    <div>
+                      <span>Last Interest Calculated: <strong><?= e($act['lastInterestCalcDate']) ?></strong></span> &middot;
+                      <a href="?tab=ledger" class="remarks-link ms-2">
+                        <i class="bi bi-journal-text me-1"></i> View Repayment Ledger
+                      </a>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <div class="card metric p-5 text-center">
+            <i class="bi bi-check2-circle fs-1 text-success mb-3"></i>
+            <h5 class="fw-bold text-dark">No Active Loans</h5>
+            <p class="text-muted">You do not have any active borrowing facilities at the moment. Need credit? Explore our catalog.</p>
+            <div>
+              <a href="?tab=catalog" class="btn apply-btn px-4 fw-bold">Apply for a Loan</a>
+            </div>
+          </div>
+        <?php endif; ?>
+      <?php endif; ?>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 4: REPAYMENT LEDGER (/member/loans/ledger) -->
+      <!-- ============================================================== -->
+      <?php if ($activeTab === 'ledger'): ?>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+          <div>
+            <h1 class="h4 fw-bold mb-1">Repayment Ledger & Audit Log</h1>
+            <p class="text-muted small mb-0">Immutable transaction history recording disbursements, daily interest accruals, repayments, and running balances.</p>
+          </div>
+          <a href="?tab=active" class="btn btn-outline-primary btn-sm fw-semibold">
+            <i class="bi bi-arrow-left me-1"></i> Active Loans
+          </a>
+        </div>
+
+        <div class="card metric">
+          <div class="card-body p-0">
             <div class="table-responsive">
-              <table class="table align-middle">
-                <thead>
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
                   <tr>
-                    <th>Loan Type</th>
-                    <th>Applied Date</th>
-                    <th>Amount</th>
-                    <th>Return Date</th>
-                    <th>Status</th>
-                    <th>Remarks</th>
+                    <th>Date</th>
+                    <th>Loan Facility</th>
+                    <th>Event Type</th>
+                    <th>M-Pesa Receipt</th>
+                    <th class="text-end">Total Amount</th>
+                    <th>Waterfall Split (Penalty | Billed | Accrued | Principal)</th>
+                    <th class="text-end">Principal Snapshot</th>
+                    <th class="text-end">Accrued Snapshot</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <?php foreach ($loanApplications as $app): ?>
+                  <?php foreach ($memberLedger as $tx): ?>
                     <tr>
-                      <td class="fw-bold"><?= e($app['LoanType']) ?></td>
-                      <td><?= e($app['CreatedAt']) ?></td>
-                      <td class="fw-bold">KES <?= number_format((float)$app['Amount'], 2) ?></td>
-                      <td><?= e($app['ReturnDate']) ?></td>
+                      <td class="small fw-semibold"><?= e($tx['transactionDate']) ?></td>
                       <td>
-                        <?php if ($app['Status'] === 'Approved'): ?>
-                          <strong class="text-success">Approved</strong>
-                        <?php elseif ($app['Status'] === 'Not Approved'): ?>
-                          <strong class="text-danger">Not Approved</strong>
-                        <?php else: ?>
-                          <strong class="text-warning">Pending</strong>
-                        <?php endif; ?>
+                        <div class="fw-semibold text-dark"><?= e($tx['loanType']) ?></div>
+                        <span class="badge bg-light text-dark border" style="font-family: monospace; font-size: 0.72rem;">
+                          <?= e($tx['repayment_account']) ?>
+                        </span>
                       </td>
                       <td>
-                        <?php if (trim((string)$app['RejectionReason']) !== ''): ?>
-                          <a
-                            href="#"
-                            class="remarks-link"
-                            data-bs-toggle="modal"
-                            data-bs-target="#applicationRemarksModal"
-                            data-remarks="<?= e($app['RejectionReason']) ?>"
-                          >View remarks</a>
-                        <?php else: ?>
-                          <span class="text-muted small">-</span>
-                        <?php endif; ?>
+                        <span class="badge bg-<?= $tx['transactionType'] === 'REPAYMENT' ? 'success' : ($tx['transactionType'] === 'DISBURSEMENT' ? 'primary' : 'warning text-dark') ?>">
+                          <?= e($tx['transactionType']) ?>
+                        </span>
+                      </td>
+                      <td class="small"><?= e($tx['mpesaReceiptNumber'] ?: '-') ?></td>
+                      <td class="text-end fw-bold">
+                        KES <?= number_format((float)$tx['totalAmount'], 2) ?>
+                      </td>
+                      <td>
+                        <span class="badge bg-danger" style="font-size:0.7rem;" title="Allocated to late penalties">Pen: <?= number_format((float)$tx['allocatedPenalty'], 2) ?></span>
+                        <span class="badge bg-warning text-dark" style="font-size:0.7rem;" title="Allocated to overdue billed interest">Bil: <?= number_format((float)$tx['allocatedBilledInterest'], 2) ?></span>
+                        <span class="badge bg-info text-dark" style="font-size:0.7rem;" title="Allocated to current accrued interest">Acc: <?= number_format((float)$tx['allocatedAccruedInterest'], 2) ?></span>
+                        <span class="badge bg-success" style="font-size:0.7rem;" title="Allocated to loan principal">Prin: <?= number_format((float)$tx['allocatedPrincipal'], 2) ?></span>
+                      </td>
+                      <td class="text-end fw-semibold text-primary">
+                        KES <?= number_format((float)$tx['principalAfter'], 2) ?>
+                      </td>
+                      <td class="text-end fw-semibold text-danger">
+                        KES <?= number_format((float)$tx['accruedInterestAfter'], 2) ?>
                       </td>
                     </tr>
                   <?php endforeach; ?>
-                  <?php if (!$loanApplications): ?>
-                    <tr><td colspan="6" class="text-muted text-center py-3">You have not applied for any loans yet.</td></tr>
+                  <?php if (empty($memberLedger)): ?>
+                    <tr>
+                      <td colspan="8" class="text-center text-muted py-5">
+                        <i class="bi bi-journal-x fs-1 d-block text-secondary mb-2"></i>
+                        No loan transaction events recorded yet.
+                      </td>
+                    </tr>
                   <?php endif; ?>
                 </tbody>
               </table>
             </div>
           </div>
-        </section>
+        </div>
       <?php endif; ?>
 
-      <!-- RECORD TAB -->
+      <!-- ============================================================== -->
+      <!-- TAB 6: GENERAL MEMBER TRANSACTIONS RECORD -->
+      <!-- ============================================================== -->
       <?php if ($activeTab === 'record'): ?>
         <section class="card metric">
           <div class="card-body">
@@ -696,12 +1111,13 @@ function dashboardUrl(array $params): string
                       <?php
                         $isWithdrawal = $row['TransactionType'] === 'withdrawal';
                         $isTransfer = ($row['TransactionCategory'] ?? '') === 'credit_transfer';
+                        $isLoanRepay = $row['TransactionType'] === 'loan_repayment';
                       ?>
-                      <td class="<?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : 'text-success') ?> fw-semibold">
-                        <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : 'bi-arrow-down-left') ?> me-1" aria-hidden="true"></i>
-                        <?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : 'Contribution') ?>
+                      <td class="<?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?> fw-semibold">
+                        <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : ($isLoanRepay ? 'bi-arrow-clockwise text-warning' : 'bi-arrow-down-left')) ?> me-1" aria-hidden="true"></i>
+                        <?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : ($isLoanRepay ? 'Loan Repayment' : 'Contribution')) ?>
                       </td>
-                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : 'text-success') ?>"><?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : '+') ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
+                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?>"><?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : ($isLoanRepay ? '↺' : '+')) ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
                     </tr>
                   <?php endforeach; ?>
                   <?php if (!$paginatedTransactions): ?>
@@ -736,38 +1152,69 @@ function dashboardUrl(array $params): string
     </div>
   </main>
 
-  <div class="modal fade" id="applicationRemarksModal" tabindex="-1" aria-labelledby="applicationRemarksModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
-      <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header">
-          <h5 class="modal-title fw-bold" id="applicationRemarksModalLabel">Application Remarks</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-0 text-muted" id="applicationRemarksText"></p>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Dynamically inject clicked loan details into modal
+    // Copy 5-character repayment account helper
+    function copyRepayCode(code) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(() => {
+          alert('Copied repayment account code: ' + code);
+        }).catch(() => {
+          prompt('Copy repayment account code:', code);
+        });
+      } else {
+        prompt('Copy repayment account code:', code);
+      }
+    }
+
+    // Modal Dynamic Content Population
     const applyLoanModal = document.getElementById('applyLoanModal');
     if (applyLoanModal) {
       applyLoanModal.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
-        const loanTitle = button.getAttribute('data-loan-title');
-        const modalInputLoanType = applyLoanModal.querySelector('#modalLoanType');
-        modalInputLoanType.value = loanTitle;
-      });
-    }
+        if (!button) return;
 
-    const applicationRemarksModal = document.getElementById('applicationRemarksModal');
-    if (applicationRemarksModal) {
-      applicationRemarksModal.addEventListener('show.bs.modal', function (event) {
-        const button = event.relatedTarget;
-        applicationRemarksModal.querySelector('#applicationRemarksText').textContent = button.getAttribute('data-remarks') || 'No remarks provided.';
+        const loanId = button.getAttribute('data-loan-id');
+        const loanTitle = button.getAttribute('data-loan-title');
+        const loanMax = parseFloat(button.getAttribute('data-loan-max') || '0');
+        const periodMode = button.getAttribute('data-loan-period-mode');
+        const predefinedDate = button.getAttribute('data-predefined-date');
+        const customMinDate = button.getAttribute('data-custom-min-date');
+        const interestInfo = button.getAttribute('data-loan-interest');
+
+        document.getElementById('modalLoanId').value = loanId;
+        document.getElementById('modalLoanTitle').value = loanTitle;
+        document.getElementById('modalInterestHelp').textContent = 'Pricing: ' + interestInfo;
+
+        const amountInput = document.getElementById('modalAmount');
+        amountInput.max = loanMax;
+        document.getElementById('modalMaxAmountHelp').textContent = 'Maximum borrowing limit: KES ' + Number(loanMax).toLocaleString(undefined, {minimumFractionDigits: 2});
+
+        const preWrapper = document.getElementById('predefinedDateWrapper');
+        const custWrapper = document.getElementById('customDateWrapper');
+        const preInput = document.getElementById('modalPredefinedReturnDate');
+        const custInput = document.getElementById('modalCustomReturnDate');
+
+        if (periodMode === 'custom') {
+          preWrapper.style.display = 'none';
+          preInput.removeAttribute('name');
+          preInput.removeAttribute('required');
+
+          custWrapper.style.display = 'block';
+          custInput.setAttribute('name', 'return_date');
+          custInput.setAttribute('required', 'required');
+          custInput.min = customMinDate;
+          custInput.value = customMinDate;
+        } else {
+          custWrapper.style.display = 'none';
+          custInput.removeAttribute('name');
+          custInput.removeAttribute('required');
+
+          preWrapper.style.display = 'block';
+          preInput.setAttribute('name', 'return_date');
+          preInput.setAttribute('required', 'required');
+          preInput.value = predefinedDate;
+        }
       });
     }
   </script>
