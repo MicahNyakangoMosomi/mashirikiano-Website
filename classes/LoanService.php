@@ -401,14 +401,16 @@ class LoanService
                  principalAfter, accruedInterestAfter)
                 VALUES 
                 (:active_id, :account, NULL, 'DISBURSEMENT', :tx_date,
-                 :amount, 0.00, 0.00, 0.00, :amount,
-                 :amount, 0.00)
+                 :total_amt, 0.00, 0.00, 0.00, :allocated_principal,
+                 :principal_after, 0.00)
             ");
             $txStmt->execute([
-                ':active_id' => $activeLoanId,
-                ':account' => $repaymentAccount,
-                ':tx_date' => $today,
-                ':amount' => $principal,
+                ':active_id'           => $activeLoanId,
+                ':account'             => $repaymentAccount,
+                ':tx_date'             => $today,
+                ':total_amt'           => $principal,
+                ':allocated_principal' => $principal,
+                ':principal_after'     => $principal,
             ]);
 
             $pdo->commit();
