@@ -121,18 +121,6 @@ class LoanService
               ON UPDATE CASCADE
               ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
-
-        // Seed initial catalog if empty
-        $count = (int)$pdo->query("SELECT COUNT(*) FROM `loan`")->fetchColumn();
-        if ($count === 0) {
-            $pdo->exec("INSERT INTO `loan` (`loanType`, `loanDescription`, `maxAmount`, `loanQualification_AkibaAmount`, `loanQualification_UshirikaAmount`, `loanInterest`, `paymentPeriod`, `interestType`)
-            VALUES 
-            ('Emergency Loan', 'Members may access emergency facilities for urgent requirements, repayable within flexible durations.', 300000.00, 5000.00, 1000.00, 0.1200, '90 Days', 'REDUCING_BALANCE'),
-            ('Development Loan', 'Long-term financing for development projects with flexible clearance schedules.', 10000000.00, 50000.00, 10000.00, 0.1400, 'CUSTOM', 'REDUCING_BALANCE'),
-            ('Elimu Loan', 'Education and school fee financing priced at fair interest on reducing balance.', 1000000.00, 10000.00, 3000.00, 0.1200, '365 Days', 'REDUCING_BALANCE'),
-            ('Biashara Loan', 'Enterprise capital designed to support business expansion and inventory.', 500000.00, 15000.00, 5000.00, 0.1300, 'CUSTOM', 'FLAT_RATE'),
-            ('Nunua Simu Loan', 'Convenient mobile device credit facility with rapid approvals.', 20000.00, 1000.00, 500.00, 0.1000, '30 Days', 'FLAT_RATE');");
-        }
     }
 
     /**
