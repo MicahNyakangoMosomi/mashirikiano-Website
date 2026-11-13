@@ -132,7 +132,7 @@ function e($value): string
           </div></fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">File Uploads</legend><div class="row g-3">
           <?php foreach ([['national_id_file','NationalIDDocument','National ID/Passport/Alien ID PDF','application/pdf'],['kra_file','KRADocument','KRA certificate PDF','application/pdf'],['passport_photo_file','PassportPhoto','Passport photo','image/*'],['membership_form_file','MembershipForm','Signed membership form PDF','application/pdf']] as [$field,$column,$label,$accept]): ?>
-            <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><?php if (!empty($member[$column])): ?><div class="small mb-1"><a href="../<?= e($member[$column]) ?>" target="_blank" rel="noopener">View current document</a></div><?php endif; ?><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= e($accept) ?>"></div>
+            <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><?php if (!empty($member[$column])): ?><div class="small mb-1"><button class="btn btn-link btn-sm p-0 document-preview-trigger" type="button" data-document-url="../<?= e($member[$column]) ?>" data-document-name="<?= e($label) ?>">View current document</button></div><?php endif; ?><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= e($accept) ?>"></div>
           <?php endforeach; ?>
           </div></fieldset>
           
@@ -169,7 +169,37 @@ function e($value): string
       </div>
     </section>
   </main>
+  <div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-labelledby="documentPreviewTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="documentPreviewTitle">Member document</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-0" style="height: min(75vh, 800px);">
+          <iframe id="documentPreviewFrame" title="Member document preview" style="width: 100%; height: 100%; border: 0;"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script>
+    const documentPreviewModal = document.getElementById('documentPreviewModal');
+    const documentPreviewFrame = document.getElementById('documentPreviewFrame');
+    const documentPreviewTitle = document.getElementById('documentPreviewTitle');
+
+    document.querySelectorAll('.document-preview-trigger').forEach(function (button) {
+      button.addEventListener('click', function () {
+        documentPreviewFrame.src = button.dataset.documentUrl;
+        documentPreviewTitle.textContent = button.dataset.documentName;
+        bootstrap.Modal.getOrCreateInstance(documentPreviewModal).show();
+      });
+    });
+
+    documentPreviewModal.addEventListener('hidden.bs.modal', function () {
+      documentPreviewFrame.src = 'about:blank';
+    });
+
     const passwordInput = document.getElementById('password');
     const generatePasswordButton = document.getElementById('generatePassword');
     const clearPasswordButton = document.getElementById('clearPassword');
