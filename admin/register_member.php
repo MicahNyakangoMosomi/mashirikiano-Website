@@ -57,6 +57,7 @@ function e($value): string
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="admin.css" rel="stylesheet">
   <style>
+    .required-label::after { content: " *"; color: #dc3545; }
   </style>
 </head>
 <body>
@@ -74,19 +75,19 @@ function e($value): string
         <form method="post" enctype="multipart/form-data" class="row g-3" onsubmit="return confirm('Register this member and save the record to the database?');">
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Personal Info</legend><div class="row g-3">
           <div class="col-md-3">
-            <label class="form-label" for="first_name">FirstName</label>
+            <label class="form-label required-label" for="first_name">FirstName</label>
             <input class="form-control" id="first_name" name="first_name" required>
           </div>
           <div class="col-md-3">
-            <label class="form-label" for="last_name">LastName</label>
+            <label class="form-label required-label" for="last_name">LastName</label>
             <input class="form-control" id="last_name" name="last_name" required>
           </div>
           <div class="col-md-3">
-            <label class="form-label" for="phone">PrimaryNumber</label>
+            <label class="form-label required-label" for="phone">PrimaryNumber</label>
             <input class="form-control" id="phone" name="phone" required>
           </div>
           <div class="col-md-3">
-            <label class="form-label" for="national_id">NationalID</label>
+            <label class="form-label required-label" for="national_id">NationalID</label>
             <input class="form-control" id="national_id" name="national_id" required>
           </div>
           <div class="col-md-6">
@@ -113,7 +114,7 @@ function e($value): string
           <?php endforeach; ?>
           </div></fieldset>
           <div class="col-md-6">
-            <label class="form-label" for="deposit_paid">Deposit Paid?</label>
+            <label class="form-label required-label" for="deposit_paid">Deposit Paid?</label>
             <select class="form-select" id="deposit_paid" name="deposit_paid" required>
               <option value="yes">Yes - activate and send credentials</option>
               <option value="no">No - keep member pending</option>

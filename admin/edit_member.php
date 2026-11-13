@@ -67,6 +67,7 @@ function e($value): string
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="admin.css" rel="stylesheet">
   <style>
+    .required-label::after { content: " *"; color: #dc3545; }
   </style>
 </head>
 <body>
@@ -96,19 +97,19 @@ function e($value): string
             <input class="form-control" value="<?= e($member['CreatedAt']) ?>" disabled>
           </div>
           <div class="col-md-6">
-            <label class="form-label">FirstName</label>
+            <label class="form-label required-label">FirstName</label>
             <input class="form-control" name="first_name" value="<?= e($member['FirstName']) ?>" required>
           </div>
           <div class="col-md-6">
-            <label class="form-label">LastName</label>
+            <label class="form-label required-label">LastName</label>
             <input class="form-control" name="last_name" value="<?= e($member['LastName']) ?>" required>
           </div>
           <div class="col-md-6">
-            <label class="form-label">PrimaryNumber</label>
+            <label class="form-label required-label">PrimaryNumber</label>
             <input class="form-control" name="phone" value="<?= e($member['PrimaryNumber']) ?>" required>
           </div>
           <div class="col-md-6">
-            <label class="form-label">NationalID</label>
+            <label class="form-label required-label">NationalID</label>
             <input class="form-control" name="national_id" value="<?= e($member['NationalID']) ?>" required>
           </div>
           <div class="col-md-6">
