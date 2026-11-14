@@ -103,11 +103,11 @@ function e($value): string
             <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= $field === 'JoiningDate' ? e(date('Y-m-d')) : '' ?>" <?= $field === 'JoiningDate' ? 'type="date" readonly' : ($field === 'GrossMonthlyIncome' ? 'type="number" step="0.01" min="0.01"' : '') ?>></div>
           <?php endforeach; ?>
           </div></fieldset>
-          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend><div class="row g-3">
-          <?php foreach (['NomineeName'=>'Full Name','NomineeNationalID'=>'National ID','NomineeDateOfBirth'=>'Date of Birth','NomineeRelationship'=>'Relationship','NomineePhone'=>'Phone','NomineeAllocation'=>'Allocation (%)'] as $field => $label): ?>
-            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" <?= str_contains($field,'Date') ? 'type="date"' : (str_contains($field,'Allocation') ? 'type="number" step="0.01" min="0.01" max="100"' : '') ?>></div>
-          <?php endforeach; ?>
-          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend>
+            <div id="nextOfKinList" class="row g-3"></div>
+            <button class="btn btn-outline-primary mt-3" type="button" id="addNextOfKin">Add next of kin</button>
+            <span class="form-text ms-2">Add up to 3 next of kin.</span>
+          </fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">File Uploads</legend><div class="row g-3">
           <?php foreach (['national_id_file'=>'National ID/Passport/Alien ID PDF','kra_file'=>'KRA certificate PDF','passport_photo_file'=>'Passport photo image','membership_form_file'=>'Signed membership form PDF'] as $field => $label): ?>
             <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= $field === 'passport_photo_file' ? 'image/jpeg,image/png,image/webp' : 'application/pdf' ?>"></div>
