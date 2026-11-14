@@ -168,15 +168,19 @@ class Mpesa
                             );
                         }
 
-                        self::insertLedgerTransaction(
-                            $pdo,
-                            $data,
-                            $loanMember,
-                            (float)$data['Amount'],
-                            'loan_repayment',
-                            'loan_repayment',
-                            'Loan repayment for account ' . $billRef
-                        );
+                        $memberLedgerStmt = $pdo->prepare('SELECT TransactionID FROM member_transactions WHERE TranID = :tran_id AND TransactionType = \'loan_repayment\' LIMIT 1');
+                        $memberLedgerStmt->execute([':tran_id' => $data['TranID']]);
+                        if (!$memberLedgerStmt->fetchColumn()) {
+                            self::insertLedgerTransaction(
+                                $pdo,
+                                $data,
+                                $loanMember,
+                                (float)$data['Amount'],
+                                'loan_repayment',
+                                'loan_repayment',
+                                'Loan repayment for account ' . $billRef
+                            );
+                        }
                         $pdo->commit();
                     } catch (Throwable $error) {
                         if ($pdo->inTransaction()) {

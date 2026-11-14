@@ -704,15 +704,35 @@ class LoanService
                 ':ai_after' => $accruedInterestAfter,
             ]);
 
+            $memberStmt = $pdo->prepare('SELECT MemberID, FirstName, LastName, PrimaryNumber FROM members WHERE MemberID = :member_id LIMIT 1');
+            $memberStmt->execute([':member_id' => $loan['memberID']]);
+            $member = $memberStmt->fetch();
+            if (!$member) {
+                throw new RuntimeException('Loan repayment member could not be found.');
+            }
+
+            $ledgerTranId = $mpesaReceiptNumber ?: ('LOAN-' . $activeLoanId . '-' . $pdo->lastInsertId());
+            $ledgerStmt = $pdo->prepare("INSERT INTO member_transactions
+                (TranID, MemberID, AccountNumber, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
+                VALUES (:tran_id, :member_id, :account_number, :first_name, :last_name, :phone, :amount, 'loan_repayment', 'loan_repayment', :reference, :description, :tran_time)");
+            $ledgerStmt->execute([
+                ':tran_id' => $ledgerTranId,
+                ':member_id' => $member['MemberID'],
+                ':account_number' => $repaymentAccount,
+                ':first_name' => $member['FirstName'],
+                ':last_name' => $member['LastName'],
+                ':phone' => $member['PrimaryNumber'],
+                ':amount' => $amount,
+                ':reference' => $mpesaReceiptNumber ?: $ledgerTranId,
+                ':description' => 'Loan repayment for account ' . $repaymentAccount,
+                ':tran_time' => $transactionDate . ' 00:00:00',
+            ]);
+
             if (!$wasInTx) {
                 $pdo->commit();
             }
 
             // Send repayment confirmation SMS
-            $memStmt = $pdo->prepare("SELECT FirstName, PrimaryNumber FROM members WHERE MemberID = :id LIMIT 1");
-            $memStmt->execute([':id' => $loan['memberID']]);
-            $member = $memStmt->fetch();
-
             if (!$wasInTx && $member && !empty($member['PrimaryNumber'])) {
                 $totalOwedAfter = round($principalAfter + $newBilled + $accruedInterestAfter + $newPenalty, 2);
                 $paymentDate = date('d M Y', strtotime($transactionDate));
