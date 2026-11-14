@@ -59,6 +59,10 @@ if (!$member) {
     exit;
 }
 
+$kinStmt = $pdo->prepare('SELECT FullName, NationalID, DateOfBirth, Relationship, Phone, Allocation FROM next_of_kin WHERE MemberID = :member_id ORDER BY NextOfKinID');
+$kinStmt->execute([':member_id' => $memberId]);
+$nextOfKin = $kinStmt->fetchAll(PDO::FETCH_ASSOC);
+
 function e($value): string
 {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -133,11 +137,16 @@ function e($value): string
             <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= $field === 'JoiningDate' ? e($member[$field] ?: date('Y-m-d')) : e($member[$field] ?? '') ?>" <?= $field === 'JoiningDate' ? 'type="date" readonly' : (str_contains($field,'Date') ? 'type="date"' : ($field === 'GrossMonthlyIncome' ? 'type="number" step="0.01" min="0.01"' : '')) ?>></div>
           <?php endforeach; ?>
           </div></fieldset>
-          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend><div class="row g-3">
-          <?php foreach (['NomineeName'=>'Full Name','NomineeNationalID'=>'National ID','NomineeDateOfBirth'=>'Date of Birth','NomineeRelationship'=>'Relationship','NomineePhone'=>'Phone','NomineeAllocation'=>'Allocation (%)'] as $field => $label): ?>
-            <div class="col-md-4"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" value="<?= e($member[$field] ?? '') ?>" <?= str_contains($field,'Date') ? 'type="date"' : (str_contains($field,'Allocation') ? 'type="number" step="0.01" min="0.01" max="100"' : '') ?>></div>
-          <?php endforeach; ?>
-          </div></fieldset>
+          <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">Next of Kin</legend>
+            <?php if ($nextOfKin): ?><div class="row g-3 mb-3">
+              <?php foreach ($nextOfKin as $index => $kin): ?><div class="col-12 border rounded p-3"><div class="fw-semibold mb-2">Existing next of kin <?= $index + 1 ?></div><div class="row g-3">
+                <?php foreach (['FullName'=>'Full Name','NationalID'=>'National ID','DateOfBirth'=>'Date of Birth','Relationship'=>'Relationship','Phone'=>'Phone','Allocation'=>'Allocation (%)'] as $field => $label): ?><div class="col-md-4"><label class="form-label"><?= e($label) ?></label><input class="form-control" value="<?= e($kin[$field] ?? '') ?>" disabled></div><?php endforeach; ?>
+              </div></div><?php endforeach; ?>
+            </div><?php else: ?><p class="text-muted">No next of kin have been added yet.</p><?php endif; ?>
+            <div id="newNextOfKinList" class="row g-3"></div>
+            <?php if (count($nextOfKin) < 3): ?><button class="btn btn-outline-primary mt-3" type="button" id="addNextOfKin">Add next of kin</button><?php endif; ?>
+            <span class="form-text ms-2">Up to 3 next of kin per member.</span>
+          </fieldset>
           <fieldset class="col-12 border rounded p-3"><legend class="float-none w-auto px-2 fs-6 fw-semibold">File Uploads</legend><div class="row g-3">
           <?php foreach ([['national_id_file','NationalIDDocument','id','National ID/Passport/Alien ID PDF','application/pdf'],['kra_file','KRADocument','kra','KRA certificate PDF','application/pdf'],['passport_photo_file','PassportPhoto','photo','Passport photo','image/*'],['membership_form_file','MembershipForm','form','Signed membership form PDF','application/pdf']] as [$field,$column,$type,$label,$accept]): ?>
             <div class="col-md-6"><label class="form-label" for="<?= e($field) ?>"><?= e($label) ?></label><?php if (!empty($member[$column])): ?><div class="small mb-1 d-flex gap-3"><button class="btn btn-link btn-sm p-0 document-preview-trigger" type="button" data-document-url="member_document.php?id=<?= urlencode($member['MemberID']) ?>&amp;type=<?= e($type) ?>" data-document-name="<?= e($label) ?>">View current document</button><button class="btn btn-link btn-sm p-0 text-danger remove-document-trigger" type="button" data-document-type="<?= e($type) ?>">Remove file</button></div><?php endif; ?><input class="form-control" id="<?= e($field) ?>" name="<?= e($field) ?>" type="file" accept="<?= e($accept) ?>"></div>
@@ -217,6 +226,24 @@ function e($value): string
     });
 
     const passwordInput = document.getElementById('password');
+    const addNextOfKinButton = document.getElementById('addNextOfKin');
+    const newNextOfKinList = document.getElementById('newNextOfKinList');
+    const existingNextOfKinCount = <?= count($nextOfKin) ?>;
+    const nextOfKinFields = [['name','Full Name','text'],['national_id','National ID','text'],['date_of_birth','Date of Birth','date'],['relationship','Relationship','text'],['phone','Phone','tel'],['allocation','Allocation (%)','number']];
+    if (addNextOfKinButton && newNextOfKinList) {
+      addNextOfKinButton.addEventListener('click', function () {
+        const newCount = newNextOfKinList.children.length;
+        if (existingNextOfKinCount + newCount >= 3) return;
+        const card = document.createElement('div');
+        card.className = 'col-12 border rounded p-3';
+        card.innerHTML = '<div class="fw-semibold mb-2">New next of kin ' + (existingNextOfKinCount + newCount + 1) + '</div><div class="row g-3">' + nextOfKinFields.map(function (field) {
+          const key = field[0], label = field[1], type = field[2];
+          return '<div class="col-md-4"><label class="form-label">' + label + '</label><input class="form-control" name="next_of_kin[' + newCount + '][' + key + ']" type="' + type + '" ' + (key === 'allocation' ? 'step="0.01" min="0.01" max="100"' : '') + '></div>';
+        }).join('') + '</div>';
+        newNextOfKinList.appendChild(card);
+        if (existingNextOfKinCount + newNextOfKinList.children.length >= 3) addNextOfKinButton.disabled = true;
+      });
+    }
     const generatePasswordButton = document.getElementById('generatePassword');
     const clearPasswordButton = document.getElementById('clearPassword');
     const passwordDigits = '0123456789';

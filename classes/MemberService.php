@@ -178,7 +178,7 @@ class MemberService
         $pdo = Database::connection();
         $pdo->beginTransaction();
         try {
-            self::saveNextOfKin($pdo, $memberId, $nextOfKin);
+            self::saveNextOfKin($pdo, $memberId, $nextOfKin, false);
             $pdo->commit();
         } catch (Throwable $error) {
             $pdo->rollBack();
@@ -206,10 +206,13 @@ class MemberService
         return $values;
     }
 
-    private static function saveNextOfKin(PDO $pdo, string $memberId, array $items): void
+    private static function saveNextOfKin(PDO $pdo, string $memberId, array $items, bool $replace = true): void
     {
-        if (count($items) > 3) throw new InvalidArgumentException('A member can have no more than 3 next of kin.');
-        $pdo->prepare('DELETE FROM next_of_kin WHERE MemberID = ?')->execute([$memberId]);
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM next_of_kin WHERE MemberID = ?');
+        $countStmt->execute([$memberId]);
+        $existingCount = (int)$countStmt->fetchColumn();
+        if ($existingCount + count($items) > 3) throw new InvalidArgumentException('A member can have no more than 3 next of kin.');
+        if ($replace) $pdo->prepare('DELETE FROM next_of_kin WHERE MemberID = ?')->execute([$memberId]);
         $stmt = $pdo->prepare('INSERT INTO next_of_kin (MemberID, FullName, NationalID, DateOfBirth, Relationship, Phone, Allocation) VALUES (?, ?, ?, ?, ?, ?, ?)');
         foreach ($items as $item) {
             if (!is_array($item)) continue;
