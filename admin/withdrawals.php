@@ -143,13 +143,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_withdrawal'])
 
         // 1. Insert into member_transactions ledger FIRST so TranID exists for FK in withdrawals
         $ledgerStmt = $pdo->prepare("INSERT INTO member_transactions
-            (TranID, MemberID, NationalID, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
+            (TranID, MemberID, AccountNumber, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
             VALUES
-            (:tran_id, :member_id, :national_id, :first_name, :last_name, :msisdn, :amount, 'withdrawal', 'member_withdrawal', :reference, :description, :tran_time)");
+            (:tran_id, :member_id, :account_number, :first_name, :last_name, :msisdn, :amount, 'withdrawal', 'member_withdrawal', :reference, :description, :tran_time)");
         $ledgerStmt->execute([
             ':tran_id' => $tranId,
             ':member_id' => $memberId,
-            ':national_id' => $member['NationalID'],
+            ':account_number' => $member['NationalID'],
             ':first_name' => $member['FirstName'],
             ':last_name' => $member['LastName'],
             ':msisdn' => $member['PrimaryNumber'],

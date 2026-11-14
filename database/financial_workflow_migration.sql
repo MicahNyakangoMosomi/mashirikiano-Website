@@ -86,12 +86,12 @@ CREATE TABLE IF NOT EXISTS `member_transactions` (
   `TransactionID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `TranID` VARCHAR(60) NOT NULL,
   `MemberID` VARCHAR(40) NULL,
-  `NationalID` VARCHAR(30) NOT NULL,
+  `AccountNumber` VARCHAR(60) NOT NULL,
   `FirstName` VARCHAR(100) NOT NULL,
   `LastName` VARCHAR(100) NOT NULL,
   `MSISDN` VARCHAR(20) NOT NULL,
   `Amount` DECIMAL(12,2) NOT NULL,
-  `TransactionType` ENUM('deposit','contribution','withdrawal') NOT NULL,
+  `TransactionType` ENUM('deposit','contribution','withdrawal','loan_repayment') NOT NULL,
   `TransactionCategory` VARCHAR(60) NOT NULL DEFAULT 'general',
   `Reference` VARCHAR(120) NULL,
   `Description` VARCHAR(255) NULL,
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS `member_transactions` (
   PRIMARY KEY (`TransactionID`),
   UNIQUE KEY `uniq_member_transactions_tran_segment` (`TranID`, `TransactionType`, `TransactionCategory`),
   KEY `idx_member_transactions_member` (`MemberID`),
-  KEY `idx_member_transactions_national_id` (`NationalID`),
+  KEY `idx_member_transactions_account_number` (`AccountNumber`),
   KEY `idx_member_transactions_type` (`TransactionType`),
   KEY `idx_member_transactions_category` (`TransactionCategory`),
   KEY `idx_member_transactions_time` (`TranTime`),
@@ -137,7 +137,7 @@ SET @contributions_table_exists := (
 
 SET @copy_contributions_sql := IF(
   @contributions_table_exists > 0,
-  'INSERT IGNORE INTO `member_transactions` (`TranID`, `MemberID`, `NationalID`, `FirstName`, `LastName`, `MSISDN`, `Amount`, `TransactionType`, `TransactionCategory`, `Reference`, `Description`, `TranTime`, `CreatedAt`) SELECT c.`TranID`, m.`MemberID`, c.`NationalID`, c.`FirstName`, c.`LastName`, c.`MSISDN`, c.`Amount`, "contribution", "monthly_contribution", c.`TranID`, "Migrated from legacy contributions table", c.`TranTime`, c.`CreatedAt` FROM `contributions` c LEFT JOIN `members` m ON m.`MemberID` = c.`MemberID`',
+  'INSERT IGNORE INTO `member_transactions` (`TranID`, `MemberID`, `AccountNumber`, `FirstName`, `LastName`, `MSISDN`, `Amount`, `TransactionType`, `TransactionCategory`, `Reference`, `Description`, `TranTime`, `CreatedAt`) SELECT c.`TranID`, m.`MemberID`, c.`NationalID`, c.`FirstName`, c.`LastName`, c.`MSISDN`, c.`Amount`, "contribution", "monthly_contribution", c.`TranID`, "Migrated from legacy contributions table", c.`TranTime`, c.`CreatedAt` FROM `contributions` c LEFT JOIN `members` m ON m.`MemberID` = c.`MemberID`',
   'SELECT "No contributions table found; skipping contribution copy" AS migration_notice'
 );
 
@@ -154,7 +154,7 @@ SET @transactions_table_exists := (
 
 SET @copy_transactions_sql := IF(
   @transactions_table_exists > 0,
-  'INSERT IGNORE INTO `member_transactions` (`TranID`, `MemberID`, `NationalID`, `FirstName`, `LastName`, `MSISDN`, `Amount`, `TransactionType`, `TransactionCategory`, `Reference`, `Description`, `TranTime`, `CreatedAt`) SELECT t.`TranID`, m.`MemberID`, t.`NationalID`, t.`FirstName`, t.`LastName`, t.`MSISDN`, t.`Amount`, "contribution", "monthly_contribution", t.`TranID`, "Migrated from legacy transactions table", t.`TranTime`, t.`CreatedAt` FROM `transactions` t LEFT JOIN `members` m ON m.`MemberID` = CAST(t.`MemberID` AS CHAR)',
+  'INSERT IGNORE INTO `member_transactions` (`TranID`, `MemberID`, `AccountNumber`, `FirstName`, `LastName`, `MSISDN`, `Amount`, `TransactionType`, `TransactionCategory`, `Reference`, `Description`, `TranTime`, `CreatedAt`) SELECT t.`TranID`, m.`MemberID`, t.`NationalID`, t.`FirstName`, t.`LastName`, t.`MSISDN`, t.`Amount`, "contribution", "monthly_contribution", t.`TranID`, "Migrated from legacy transactions table", t.`TranTime`, t.`CreatedAt` FROM `transactions` t LEFT JOIN `members` m ON m.`MemberID` = CAST(t.`MemberID` AS CHAR)',
   'SELECT "No transactions table found; skipping transaction copy" AS migration_notice'
 );
 

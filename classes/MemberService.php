@@ -88,7 +88,7 @@ class MemberService
                 ]);
             }
 
-            self::linkUnmatchedContributions($memberId, $nationalId);
+            self::linkUnmatchedContributions($memberId, $nationalId, $phone);
             self::saveDocuments($memberId, $_FILES ?? [], $pdo, $savedDocuments);
             $pdo->commit();
         } catch (Throwable $error) {
@@ -177,7 +177,7 @@ class MemberService
 
         self::saveDocuments($memberId, $_FILES ?? [], Database::connection());
 
-        self::linkUnmatchedContributions($memberId, $nationalId);
+        self::linkUnmatchedContributions($memberId, $nationalId, $phone);
 
         if ($canChangePassword && $password !== '') {
             self::sendPasswordChangedSms($phone, $firstName, $lastName, $memberId, $password);
@@ -291,15 +291,22 @@ class MemberService
         return $base . ($max + 1);
     }
 
-    public static function linkUnmatchedContributions(string $memberId, string $nationalId): void
+    public static function linkUnmatchedContributions(string $memberId, string $nationalId, string $phone = ''): void
     {
         $pdo = Database::connection();
+        $phoneDigits = preg_replace('/\D+/', '', $phone);
+        $phoneLocal = str_starts_with($phoneDigits, '254') ? '0' . substr($phoneDigits, 3) : $phoneDigits;
+        $phoneInternational = str_starts_with($phoneDigits, '0') ? '254' . substr($phoneDigits, 1) : $phoneDigits;
         $stmt = $pdo->prepare(
-            'UPDATE member_transactions SET MemberID = :member_id WHERE NationalID = :national_id AND MemberID IS NULL'
+            'UPDATE member_transactions SET MemberID = :member_id
+             WHERE MemberID IS NULL AND (AccountNumber = :account_number OR MSISDN IN (:phone, :phone_local, :phone_international))'
         );
         $stmt->execute([
             ':member_id' => $memberId,
-            ':national_id' => $nationalId,
+            ':account_number' => $nationalId,
+            ':phone' => $phone,
+            ':phone_local' => $phoneLocal,
+            ':phone_international' => $phoneInternational,
         ]);
 
         try {
@@ -361,14 +368,14 @@ class MemberService
     {
         $stmt = $pdo->prepare(
             'INSERT INTO member_transactions
-             (TranID, MemberID, NationalID, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
+             (TranID, MemberID, AccountNumber, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
              VALUES
-             (:tran_id, :member_id, :national_id, :first_name, :last_name, :msisdn, :amount, :transaction_type, :transaction_category, :reference, :description, :tran_time)'
+             (:tran_id, :member_id, :account_number, :first_name, :last_name, :msisdn, :amount, :transaction_type, :transaction_category, :reference, :description, :tran_time)'
         );
         $stmt->execute([
             ':tran_id' => $data['TranID'],
             ':member_id' => $data['MemberID'],
-            ':national_id' => $data['NationalID'],
+            ':account_number' => $data['NationalID'],
             ':first_name' => $data['FirstName'],
             ':last_name' => $data['LastName'],
             ':msisdn' => $data['MSISDN'],

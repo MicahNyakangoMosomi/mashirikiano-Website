@@ -138,8 +138,8 @@ try {
                 $savingsStmt = $pdo->prepare("SELECT TransactionType, SUM(Amount) AS total FROM member_transactions WHERE MemberID = :member_id AND TransactionType IN ('contribution', 'withdrawal') GROUP BY TransactionType");
                 $savingsStmt->execute([':member_id' => $memberId]);
             } else {
-                $savingsStmt = $pdo->prepare("SELECT TransactionType, SUM(Amount) AS total FROM member_transactions WHERE NationalID = :national_id AND TransactionType IN ('contribution', 'withdrawal') GROUP BY TransactionType");
-                $savingsStmt->execute([':national_id' => $nationalId]);
+                $savingsStmt = $pdo->prepare("SELECT TransactionType, SUM(Amount) AS total FROM member_transactions WHERE AccountNumber = :account_number AND TransactionType IN ('contribution', 'withdrawal') GROUP BY TransactionType");
+                $savingsStmt->execute([':account_number' => $nationalId]);
             }
             foreach ($savingsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 if ($row['TransactionType'] === 'contribution') {

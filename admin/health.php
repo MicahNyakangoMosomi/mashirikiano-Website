@@ -29,7 +29,7 @@ admin_health_check('members table', function () {
 });
 
 admin_health_check('member_transactions table', function () {
-    Database::connection()->query('SELECT TransactionID, TranID, MemberID, NationalID, Amount, TransactionType, CreatedAt FROM member_transactions LIMIT 1');
+    Database::connection()->query('SELECT TransactionID, TranID, MemberID, AccountNumber, Amount, TransactionType, CreatedAt FROM member_transactions LIMIT 1');
 });
 
 admin_health_check('deposits table', function () {

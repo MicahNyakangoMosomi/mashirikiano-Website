@@ -127,6 +127,7 @@ class Mpesa
         // Check if BillRefNumber matches a 5-character loan repayment account (e.g., 7M419)
         $billRef = strtoupper(trim((string)($payload['BillRefNumber'] ?? '')));
         if (preg_match('/^[0-9][A-Z][0-9]{3}$/', $billRef) || strlen($billRef) === 5) {
+            $activeLoan = null;
             try {
                 LoanService::ensureTables($pdo);
                 $lStmt = $pdo->prepare("SELECT * FROM active_loan WHERE repayment_account = :acct AND loanStatus IN ('ACTIVE', 'IN_ARREARS') LIMIT 1");
@@ -134,6 +135,19 @@ class Mpesa
                 $activeLoan = $lStmt->fetch();
 
                 if ($activeLoan) {
+                    $loanMember = self::findMemberById((string)$activeLoan['memberID']);
+                    if (!$loanMember) {
+                        $applicationStmt = $pdo->prepare('SELECT memberID FROM loan_application WHERE loanApplicationID = :application_id LIMIT 1');
+                        $applicationStmt->execute([':application_id' => $activeLoan['loanApplicationID']]);
+                        $applicationMemberId = $applicationStmt->fetchColumn();
+                        if ($applicationMemberId !== false) {
+                            $loanMember = self::findMemberById((string)$applicationMemberId);
+                        }
+                    }
+                    if (!$loanMember) {
+                        throw new RuntimeException('Loan repayment account is not linked to a SACCO member.');
+                    }
+
                     $repaymentResult = LoanService::processRepayment(
                         $pdo,
                         $billRef,
@@ -141,8 +155,6 @@ class Mpesa
                         $data['TranID'],
                         date('Y-m-d', strtotime($data['TranTime'] ?: 'now'))
                     );
-
-                    $loanMember = self::findMemberById($activeLoan['memberID']);
                     self::insertLedgerTransaction(
                         $pdo,
                         $data,
@@ -158,18 +170,21 @@ class Mpesa
                         'type' => 'loan_repayment',
                         'message' => 'Loan repayment processed via waterfall engine',
                         'tran_id' => $data['TranID'],
-                        'member_id' => $activeLoan['memberID'],
+                        'member_id' => $loanMember['MemberID'],
                         'loan_repayment' => $repaymentResult,
                         'data' => $data,
                     ];
                 }
             } catch (Throwable $loanErr) {
                 error_log('Loan repayment routing error: ' . $loanErr->getMessage());
+                if ($activeLoan) {
+                    throw $loanErr;
+                }
             }
         }
 
-        // Try match member by National ID
-        $member = self::findMemberByNationalId($data['NationalID']);
+        // Match the M-Pesa account reference against the member's registered National ID.
+        $member = self::findMemberByAccountNumber($data['AccountNumber'], $data['MSISDN']);
         $memberId = $member ? (string)$member['MemberID'] : null;
         $segments = [];
         $activationSms = null;
@@ -324,15 +339,15 @@ class Mpesa
     {
         $stmt = $pdo->prepare("
             INSERT INTO member_transactions
-            (TranID, MemberID, NationalID, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
+            (TranID, MemberID, AccountNumber, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
             VALUES
-            (:tran_id, :member_id, :national_id, :first_name, :last_name, :msisdn, :amount, :transaction_type, :transaction_category, :reference, :description, :tran_time)
+            (:tran_id, :member_id, :account_number, :first_name, :last_name, :msisdn, :amount, :transaction_type, :transaction_category, :reference, :description, :tran_time)
         ");
 
         $stmt->execute([
             ':tran_id' => $data['TranID'],
             ':member_id' => $member ? (string)$member['MemberID'] : null,
-            ':national_id' => $data['NationalID'],
+            ':account_number' => $data['AccountNumber'],
             ':first_name' => $member ? (string)$member['FirstName'] : $data['FirstName'],
             ':last_name' => $member ? (string)$member['LastName'] : $data['LastName'],
             ':msisdn' => $data['MSISDN'],
@@ -365,7 +380,7 @@ class Mpesa
                 ':tx_id' => $transactionId,
                 ':tran_id' => $data['TranID'],
                 ':member_id' => $member ? (string)$member['MemberID'] : null,
-                ':national_id' => $data['NationalID'],
+                ':national_id' => $data['AccountNumber'],
                 ':amount' => $amount,
                 ':akiba' => $akibaAmount,
                 ':ushirika' => $ushirikaAmount,
@@ -405,7 +420,7 @@ class Mpesa
     private static function normalizeC2BPayload(array $payload): array
     {
         return [
-            'NationalID' => self::cleanString($payload['BillRefNumber'] ?? ''),
+            'AccountNumber' => self::cleanString($payload['BillRefNumber'] ?? ''),
             'TranID'     => self::cleanString($payload['TransID'] ?? ''),
             'Amount'     => (float)($payload['TransAmount'] ?? 0),
             'MSISDN'     => self::normalizePhone($payload['MSISDN'] ?? ''),
@@ -424,8 +439,8 @@ class Mpesa
             throw new InvalidArgumentException("Missing transaction ID");
         }
 
-        if ($data['NationalID'] === '') {
-            throw new InvalidArgumentException("Missing National ID");
+        if ($data['AccountNumber'] === '') {
+            throw new InvalidArgumentException("Missing account number");
         }
 
         if ($data['Amount'] <= 0) {
@@ -449,6 +464,29 @@ class Mpesa
         $stmt->execute([':id' => $id]);
 
         return $stmt->fetch() ?: null;
+    }
+
+    private static function findMemberByAccountNumber(string $accountNumber, string $phone): ?array
+    {
+        $member = self::findMemberByNationalId($accountNumber);
+        if (!$member) {
+            $memberStmt = Database::connection()->prepare('SELECT * FROM members WHERE MemberID = :member_id LIMIT 1');
+            $memberStmt->execute([':member_id' => $accountNumber]);
+            $member = $memberStmt->fetch() ?: null;
+        }
+        if ($member || $phone === '') {
+            return $member;
+        }
+
+        $targetPhone = self::normalizePhone($phone);
+        $stmt = Database::connection()->query('SELECT * FROM members WHERE PrimaryNumber IS NOT NULL');
+        foreach ($stmt->fetchAll() as $candidate) {
+            if (self::normalizePhone((string)$candidate['PrimaryNumber']) === $targetPhone) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

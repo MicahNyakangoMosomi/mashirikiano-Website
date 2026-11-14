@@ -209,13 +209,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_credit_transf
 
         // 5. Record ledger transaction in member_transactions
         $ledgerStmt = $pdo->prepare("INSERT INTO member_transactions
-            (TranID, MemberID, NationalID, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
+            (TranID, MemberID, AccountNumber, FirstName, LastName, MSISDN, Amount, TransactionType, TransactionCategory, Reference, Description, TranTime)
             VALUES
-            (:tran_id, :member_id, :national_id, :first_name, :last_name, :msisdn, :amount, 'contribution', 'credit_transfer', :reference, :description, :tran_time)");
+            (:tran_id, :member_id, :account_number, :first_name, :last_name, :msisdn, :amount, 'contribution', 'credit_transfer', :reference, :description, :tran_time)");
         $ledgerStmt->execute([
             ':tran_id' => $transferCode,
             ':member_id' => $memberId,
-            ':national_id' => $member['NationalID'],
+            ':account_number' => $member['NationalID'],
             ':first_name' => $member['FirstName'],
             ':last_name' => $member['LastName'],
             ':msisdn' => $member['PrimaryNumber'],

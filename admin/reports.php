@@ -43,7 +43,7 @@ try {
     exit;
 }
 
-$allowedTypes = ['contribution', 'deposit'];
+$allowedTypes = ['contribution', 'deposit', 'loan_repayment'];
 $allowedLimits = [5, 10, 25, 50];
 $typeInput = $_GET['type'] ?? 'contribution';
 $reportType = in_array($typeInput, $allowedTypes, true) ? $typeInput : 'contribution';
@@ -70,7 +70,7 @@ if (($_GET['download'] ?? '') === 'pdf') {
     SimplePdfTable::download(
         $reportType . '-report.pdf',
         ucfirst($reportType) . ' Report',
-        ['TranID', 'Type', 'Category', 'NationalID', 'Name', 'Phone', 'MemberID', 'Date', 'Amount', 'Description'],
+        ['TranID', 'Type', 'Category', 'AccountNumber', 'Name', 'Phone', 'MemberID', 'Date', 'Amount', 'Description'],
         array_map('transactionPdfRow', $pdfRows),
         [72, 58, 78, 68, 100, 70, 62, 82, 62, 110]
     );
@@ -148,10 +148,11 @@ function loadReportTransactions(PDO $pdo, string $type, int $limit, int $page, s
     $offset = ($page - 1) * $limit;
 
     $stmt = $pdo->prepare(
-        "SELECT *
-         FROM member_transactions
+        "SELECT mt.*, COALESCE(mt.MemberID, al.memberID) AS ResolvedMemberID
+         FROM member_transactions mt
+         LEFT JOIN active_loan al ON mt.TransactionCategory = 'loan_repayment' AND mt.AccountNumber = al.repayment_account
          {$where}
-         ORDER BY COALESCE(TranTime, CreatedAt) DESC
+         ORDER BY COALESCE(mt.TranTime, mt.CreatedAt) DESC
          LIMIT {$limit} OFFSET {$offset}"
     );
     $stmt->execute($params);
@@ -164,10 +165,11 @@ function loadReportTransactionsForPdf(PDO $pdo, string $type, string $transactio
     [$where, $params] = reportFilterSql($type, $transactionSearch, $dateFrom, $dateTo);
 
     $stmt = $pdo->prepare(
-        "SELECT *
-         FROM member_transactions
+        "SELECT mt.*, COALESCE(mt.MemberID, al.memberID) AS ResolvedMemberID
+         FROM member_transactions mt
+         LEFT JOIN active_loan al ON mt.TransactionCategory = 'loan_repayment' AND mt.AccountNumber = al.repayment_account
          {$where}
-         ORDER BY COALESCE(TranTime, CreatedAt) DESC"
+         ORDER BY COALESCE(mt.TranTime, mt.CreatedAt) DESC"
     );
     $stmt->execute($params);
 
@@ -180,10 +182,10 @@ function transactionPdfRow(array $row): array
         (string)$row['TranID'],
         (string)$row['TransactionType'],
         (string)$row['TransactionCategory'],
-        (string)$row['NationalID'],
+        (string)$row['AccountNumber'],
         trim($row['FirstName'] . ' ' . $row['LastName']),
         (string)$row['MSISDN'],
-        (string)($row['MemberID'] ?: 'NULL'),
+        (string)($row['ResolvedMemberID'] ?: $row['MemberID'] ?: 'NULL'),
         (string)($row['TranTime'] ?: $row['CreatedAt']),
         number_format((float)$row['Amount'], 2),
         (string)($row['Description'] ?? ''),
@@ -197,10 +199,11 @@ function renderTransactionRows(array $transactions): string
       <tr>
         <td><?= e($row['TranID']) ?></td>
         <td><?= e($row['TransactionCategory']) ?></td>
-        <td><?= e($row['NationalID']) ?></td>
+        <td><?= e($row['AccountNumber']) ?></td>
         <td><?= e(trim($row['FirstName'] . ' ' . $row['LastName'])) ?></td>
         <td><?= e($row['MSISDN']) ?></td>
-        <td><?= $row['MemberID'] ? e($row['MemberID']) : '<span class="badge text-bg-warning">NULL</span>' ?></td>
+        <?php $resolvedMemberId = $row['ResolvedMemberID'] ?: $row['MemberID']; ?>
+        <td><?= $resolvedMemberId ? e($resolvedMemberId) : '<span class="badge text-bg-warning">NULL</span>' ?></td>
         <td><?= e($row['TranTime'] ?: $row['CreatedAt']) ?></td>
         <td><?= e($row['Description'] ?? '') ?></td>
         <td class="text-end"><?= number_format((float)$row['Amount'], 2) ?></td>
@@ -328,7 +331,7 @@ function renderPagination(int $currentPage, int $totalPages): string
 
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>TranID</th><th>Category</th><th>National ID</th><th>Name</th><th>Phone</th><th>MemberID</th><th>Date</th><th>Description</th><th class="text-end">Amount</th></tr></thead>
+            <thead><tr><th>TranID</th><th>Category</th><th>Account Number</th><th>Name</th><th>Phone</th><th>MemberID</th><th>Date</th><th>Description</th><th class="text-end">Amount</th></tr></thead>
             <tbody id="reportTableBody">
               <?= renderTransactionRows($transactions) ?>
             </tbody>

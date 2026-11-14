@@ -120,10 +120,10 @@ $depositStats = $pdo->query(
 )->fetch();
 
 $pendingContributions = $pdo->query(
-    'SELECT NationalID, FirstName, LastName, MSISDN, COUNT(*) AS ContributionCount, SUM(Amount) AS TotalAmount
+    'SELECT AccountNumber, FirstName, LastName, MSISDN, COUNT(*) AS ContributionCount, SUM(Amount) AS TotalAmount
      FROM member_transactions
      WHERE MemberID IS NULL AND TransactionType = "contribution"
-     GROUP BY NationalID, FirstName, LastName, MSISDN
+     GROUP BY AccountNumber, FirstName, LastName, MSISDN
      ORDER BY MAX(CreatedAt) DESC'
 )->fetchAll();
 
@@ -443,11 +443,11 @@ function renderPagination(int $currentPage, int $totalPages): string
         <h2 class="h5 fw-bold mb-3">Unmatched Contribution Summaries</h2>
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>NationalID</th><th>Name</th><th>Phone</th><th>Records</th><th class="text-end">Total</th></tr></thead>
+            <thead><tr><th>Account Number</th><th>Name</th><th>Phone</th><th>Records</th><th class="text-end">Total</th></tr></thead>
             <tbody>
               <?php foreach ($pendingContributions as $row): ?>
                 <tr>
-                  <td><?= e($row['NationalID']) ?></td>
+                  <td><?= e($row['AccountNumber']) ?></td>
                   <td><?= e(trim($row['FirstName'] . ' ' . $row['LastName'])) ?></td>
                   <td><?= e($row['MSISDN']) ?></td>
                   <td><?= (int)$row['ContributionCount'] ?></td>
