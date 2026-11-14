@@ -130,7 +130,7 @@ class Mpesa
             $activeLoan = null;
             try {
                 LoanService::ensureTables($pdo);
-                $lStmt = $pdo->prepare("SELECT * FROM active_loan WHERE repayment_account = :acct AND loanStatus IN ('ACTIVE', 'IN_ARREARS') LIMIT 1");
+                $lStmt = $pdo->prepare('SELECT * FROM active_loan WHERE repayment_account = :acct LIMIT 1');
                 $lStmt->execute([':acct' => $billRef]);
                 $activeLoan = $lStmt->fetch();
 
@@ -148,13 +148,16 @@ class Mpesa
                         throw new RuntimeException('Loan repayment account is not linked to a SACCO member.');
                     }
 
-                    $repaymentResult = LoanService::processRepayment(
-                        $pdo,
-                        $billRef,
-                        (float)$data['Amount'],
-                        $data['TranID'],
-                        date('Y-m-d', strtotime($data['TranTime'] ?: 'now'))
-                    );
+                    $repaymentResult = ['status' => 'loan_not_active'];
+                    if (in_array(strtoupper((string)$activeLoan['loanStatus']), ['ACTIVE', 'IN_ARREARS'], true)) {
+                        $repaymentResult = LoanService::processRepayment(
+                            $pdo,
+                            $billRef,
+                            (float)$data['Amount'],
+                            $data['TranID'],
+                            date('Y-m-d', strtotime($data['TranTime'] ?: 'now'))
+                        );
+                    }
                     self::insertLedgerTransaction(
                         $pdo,
                         $data,

@@ -67,17 +67,17 @@ try {
         $data = $result['data'];
         $amount = number_format($data['Amount'], 2);
         $sender_fullName = trim($data['FirstName'] . ' ' . $data['LastName']);
-        $nationalId = $data['NationalID'];
+        $accountNumber = $data['AccountNumber'];
         $tranId = $data['TranID'];
         $tranTime = $data['TranTime'] ?? date('Y-m-d H:i:s');
 
-        // Fetch member phone number using NationalID for SMS notification
+        // Fetch member phone number using the account reference for SMS notification
         $pdo = Database::connection();
-        // Use prepared statement to prevent SQL injection to get member phone number and FirstName and LastName where NationalID = $nationalId
-        $memberStmt = $pdo->prepare('SELECT PrimaryNumber, FirstName, LastName FROM members WHERE NationalID = :national_id LIMIT 1');
+        // Use a prepared statement to resolve the member for SMS notification.
+        $memberStmt = $pdo->prepare('SELECT PrimaryNumber, FirstName, LastName FROM members WHERE NationalID = :account_number OR MemberID = :member_id LIMIT 1');
 
         // Execute the statement with the provided national ID
-        $memberStmt->execute([':national_id' => $nationalId]);
+        $memberStmt->execute([':account_number' => $accountNumber, ':member_id' => $accountNumber]);
         // place a varibale of user number, and name(first and last name) and combine them to a full name
 
 
@@ -124,7 +124,7 @@ try {
                      FROM SaccoWallets
                      WHERE NationalID = :national_id"
                 );
-                $walletStmt->execute([':national_id' => $nationalId]);
+                $walletStmt->execute([':national_id' => $accountNumber]);
                 $wTotals = $walletStmt->fetch(PDO::FETCH_ASSOC) ?: [];
             }
             $totalContribution = (float)($wTotals['total_contrib'] ?? 0);
@@ -139,7 +139,7 @@ try {
                 $savingsStmt->execute([':member_id' => $memberId]);
             } else {
                 $savingsStmt = $pdo->prepare("SELECT TransactionType, SUM(Amount) AS total FROM member_transactions WHERE AccountNumber = :account_number AND TransactionType IN ('contribution', 'withdrawal') GROUP BY TransactionType");
-                $savingsStmt->execute([':account_number' => $nationalId]);
+                $savingsStmt->execute([':account_number' => $accountNumber]);
             }
             foreach ($savingsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 if ($row['TransactionType'] === 'contribution') {
@@ -182,7 +182,7 @@ try {
         // $allocationText = $allocation ? ' Allocation: ' . implode(', ', $allocation) . '.' : '';
 
         $tranDate = !empty($data['TranTime']) ? date('d-M-Y', strtotime($data['TranTime'])) : date('d-M-Y');
-        $smsMessage = "Confirmed. KES {$amount} credited to {$fullName} (ID {$nationalId}) Ref {$tranId} on {$tranDate}. Total savings: KES " . number_format($akibaWallet, 2) . ". Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557.";
+        $smsMessage = "Confirmed. KES {$amount} credited to {$fullName} (Account {$accountNumber}) Ref {$tranId} on {$tranDate}. Total savings: KES " . number_format($akibaWallet, 2) . ". Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
         if ($memberPhone !== '') {
@@ -190,7 +190,7 @@ try {
         } else {
             file_put_contents(
                 $logDir . '/mpesa-c2b-errors.log',
-                '[' . date('c') . '] SMS skipped: no member phone found for NationalID ' . $nationalId . ' on transaction ' . $tranId . PHP_EOL,
+                '[' . date('c') . '] SMS skipped: no member phone found for account ' . $accountNumber . ' on transaction ' . $tranId . PHP_EOL,
                 FILE_APPEND
             );
         }
