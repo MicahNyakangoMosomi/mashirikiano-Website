@@ -241,8 +241,8 @@ function dashboardUrl(array $params): string
     .remarks-link:hover { text-decoration: underline; }
     .loan-card {
       border: 0;
-      border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.05);
+      border-radius: 2px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.12);
       background: #fff;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       overflow: hidden;
@@ -251,6 +251,36 @@ function dashboardUrl(array $params): string
       transform: translateY(-4px);
       box-shadow: 0 14px 32px rgba(8, 122, 67, 0.12);
     }
+    .loan-card .card-body { padding: 22px 22px 26px !important; }
+    .loan-card .card-title {
+      color: #071d3b !important;
+      font-size: 1.22rem !important;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+    .loan-card .card-text {
+      color: #64748b !important;
+      font-size: 1rem !important;
+      line-height: 1.62;
+    }
+    .loan-card .loan-eligibility-badge {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      font-size: .72rem;
+      padding: .42rem .62rem;
+    }
+    .loan-card .apply-btn {
+      align-self: flex-start;
+      width: auto;
+      min-width: 126px;
+      padding: .72rem 1.35rem !important;
+      border-radius: 3px !important;
+      background: #125b91;
+      box-shadow: 0 8px 18px rgba(18, 91, 145, .2);
+      color: #fff;
+      text-transform: uppercase;
+    }
+    .loan-card .apply-btn:hover { background: #0e4b79; color: #fff; }
     .apply-btn {
       background: #087a43;
       color: #fff;
@@ -575,13 +605,9 @@ function dashboardUrl(array $params): string
                       <?= e($prod['loanType']) ?>
                     </h5>
                     <?php if ($isEligible): ?>
-                      <span class="badge bg-success" style="font-size: 0.75rem;">
-                        Eligible
-                      </span>
+                      <span class="badge bg-success loan-eligibility-badge">Eligible</span>
                     <?php else: ?>
-                      <span class="badge bg-danger" style="font-size: 0.75rem;">
-                        Under-Qualified
-                      </span>
+                      <span class="badge bg-danger loan-eligibility-badge">Not Eligible</span>
                     <?php endif; ?>
                   </div>
 
@@ -589,36 +615,9 @@ function dashboardUrl(array $params): string
                     <?= e($prod['loanDescription'] ?: 'Affordable SACCO financing tailored to empower members.') ?>
                   </p>
 
-                  <div class="bg-light p-3 rounded-3 mb-3">
-                    <div class="d-flex justify-content-between small mb-1">
-                      <span class="text-muted">Maximum Limit:</span>
-                      <strong class="text-success">KES <?= number_format((float)$prod['maxAmount'], 2) ?></strong>
-                    </div>
-                    <div class="d-flex justify-content-between small mb-1">
-                      <span class="text-muted">Annual Interest:</span>
-                      <strong class="text-dark"><?= number_format((float)$prod['loanInterest'] * 100, 2) ?>% (<?= e($prod['interestType']) ?>)</strong>
-                    </div>
-                    <div class="d-flex justify-content-between small mb-1">
-                      <span class="text-muted">Period Mode:</span>
-                      <strong class="text-primary"><?= e($prod['paymentPeriod']) ?></strong>
-                    </div>
-                    <div class="border-top pt-2 mt-2">
-                      <div class="d-flex justify-content-between small text-muted">
-                        <span>Min. Akiba: KES <?= number_format((float)$prod['loanQualification_AkibaAmount'], 2) ?></span>
-                        <span>Min. Ushirika: KES <?= number_format((float)$prod['loanQualification_UshirikaAmount'], 2) ?></span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <?php if (!$isEligible): ?>
-                    <div class="alert alert-warning py-1 px-2 small mb-3 text-center" style="font-size: 0.75rem;">
-                      <?= e($elig['reason']) ?>
-                    </div>
-                  <?php endif; ?>
-
                   <button 
                     type="button" 
-                    class="btn <?= $isEligible ? 'apply-btn' : 'btn-secondary opacity-75' ?> w-100 py-2 rounded-3 fw-bold" 
+                    class="btn <?= $isEligible ? 'apply-btn' : 'btn-secondary opacity-75' ?> py-2 rounded-3 fw-bold"
                     <?= $isEligible ? '' : 'disabled' ?>
                     data-bs-toggle="modal" 
                     data-bs-target="#applyLoanModal"
@@ -630,7 +629,7 @@ function dashboardUrl(array $params): string
                     data-custom-min-date="<?= e($customMinDate) ?>"
                     data-loan-interest="<?= number_format((float)$prod['loanInterest'] * 100, 2) ?>% (<?= e($prod['interestType']) ?>)"
                   >
-                    <?= $isEligible ? 'Apply Now' : 'Requires More Savings' ?>
+                    Apply Now
                   </button>
                 </div>
               </div>
