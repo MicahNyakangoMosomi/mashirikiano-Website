@@ -713,9 +713,11 @@ class LoanService
             $memStmt->execute([':id' => $loan['memberID']]);
             $member = $memStmt->fetch();
 
-            if ($member && !empty($member['PrimaryNumber'])) {
+            if (!$wasInTx && $member && !empty($member['PrimaryNumber'])) {
                 $totalOwedAfter = round($principalAfter + $newBilled + $accruedInterestAfter + $newPenalty, 2);
-                $sms = "Dear {$member['FirstName']}, your loan payment of KES " . number_format($amount, 2) . " (Ref: " . ($mpesaReceiptNumber ?: $repaymentAccount) . ") has been received. Remaining Principal: KES " . number_format($principalAfter, 2) . ". Total Payoff Balance: KES " . number_format($totalOwedAfter, 2) . ". Status: {$newStatus}.";
+                $paymentDate = date('d M Y', strtotime($transactionDate));
+                $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
+                $sms = "Dear {$member['FirstName']}, your loan repayment of KES " . number_format($amount, 2) . " was received on {$paymentDate} (Ref: " . ($mpesaReceiptNumber ?: $repaymentAccount) . "). Remaining principal: KES " . number_format($principalAfter, 2) . ". Total payoff balance: KES " . number_format($totalOwedAfter, 2) . ". Status: {$newStatus}. Check your loan status: {$portalUrl}";
                 SmsService::sendSms($member['PrimaryNumber'], $sms);
             }
 

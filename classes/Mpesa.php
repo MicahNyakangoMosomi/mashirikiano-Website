@@ -185,6 +185,14 @@ class Mpesa
                         throw $error;
                     }
 
+                    if (!empty($loanMember['PrimaryNumber'])) {
+                        $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
+                        $receipt = $data['TranID'] ?: $billRef;
+                        $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
+                        $message = "Dear {$loanMember['FirstName']}, we have received your loan repayment of KES " . number_format((float)$data['Amount'], 2) . " on {$paymentDate}. Receipt: {$receipt}. Check your loan status here: {$portalUrl}";
+                        SmsService::sendSms((string)$loanMember['PrimaryNumber'], $message);
+                    }
+
                     return [
                         'status' => 'recorded',
                         'type' => 'loan_repayment',
