@@ -197,18 +197,7 @@ try {
     $loanStats['LoanPortfolio']      = (float)($activeStats['LoanPortfolio'] ?? 0);
     $loanStats['ThisMonthDisbursed'] = (float)($activeStats['ThisMonthDisbursed'] ?? 0);
 } catch (Throwable $e) {
-    try {
-        $legacyStats = $pdo->query(
-            "SELECT
-                COUNT(*) AS TotalLoanRequests,
-                SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END) AS PendingLoans,
-                SUM(CASE WHEN Status = 'Approved' THEN 1 ELSE 0 END) AS ActiveLoans,
-                COALESCE(SUM(CASE WHEN Status = 'Approved' THEN Amount ELSE 0 END), 0) AS LoanPortfolio,
-                COALESCE(SUM(CASE WHEN Status = 'Approved' AND DATE_FORMAT(CreatedAt, '%Y-%m') = DATE_FORMAT(CURRENT_DATE(), '%Y-%m') THEN Amount ELSE 0 END), 0) AS ThisMonthDisbursed
-             FROM loan_applications"
-        )->fetch() ?: [];
-        $loanStats = array_merge($loanStats, $legacyStats);
-    } catch (Throwable $legacyErr) {}
+    // Keep dashboard loan totals at zero if the loan engine tables are unavailable.
 }
 
 $totalMembers = (int)($memberStats['TotalMembers'] ?? 0);
@@ -295,19 +284,7 @@ try {
         true
     );
 } catch (Throwable $e) {
-    try {
-        $months = hydrateMonthly(
-            $pdo,
-            $months,
-            "SELECT DATE_FORMAT(CreatedAt, '%Y-%m') AS MonthKey, COALESCE(SUM(Amount), 0) AS Value
-             FROM loan_applications
-             WHERE Status = 'Approved'
-               AND CreatedAt >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), '%Y-%m-01')
-             GROUP BY DATE_FORMAT(CreatedAt, '%Y-%m')",
-            'loans',
-            true
-        );
-    } catch (Throwable $legacyErr) {}
+    // Leave loan chart values empty if the loan engine table is unavailable.
 }
 ?>
 <!DOCTYPE html>
