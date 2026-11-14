@@ -191,14 +191,15 @@ class Mpesa
 
                     $smsSent = false;
                     $smsMember = self::findMemberByLoanAccount($pdo, $billRef);
-                    if ($smsMember && !empty($smsMember['PrimaryNumber'])) {
+                    $smsPhone = trim((string)($smsMember['PrimaryNumber'] ?? '')) ?: trim((string)$data['MSISDN']);
+                    if ($smsMember && $smsPhone !== '') {
                         $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
                         $receipt = $data['TranID'] ?: $billRef;
                         $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
                         $message = "Dear {$smsMember['FirstName']}, we have received your loan repayment of KES " . number_format((float)$data['Amount'], 2) . " on {$paymentDate}. Receipt: {$receipt}. Check your loan status here: {$portalUrl}";
-                        $smsSent = SmsService::sendSms((string)$smsMember['PrimaryNumber'], $message);
+                        $smsSent = SmsService::sendSms($smsPhone, $message);
                         if (!$smsSent) {
-                            error_log('Loan repayment confirmation SMS failed for account ' . $billRef . ', member ' . $smsMember['MemberID']);
+                            error_log('Loan repayment confirmation SMS failed for account ' . $billRef . ', member ' . $smsMember['MemberID'] . ', recipient ' . SmsService::normalizePhone($smsPhone));
                         }
                     } else {
                         error_log('Loan repayment confirmation SMS skipped: no member phone resolved for account ' . $billRef);
