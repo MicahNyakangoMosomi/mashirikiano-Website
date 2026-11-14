@@ -244,6 +244,9 @@ function renderMemberRows(array $members): string
         <td class="text-end fw-semibold wallet-ushirika"><?= number_format((float)$member['UshirikaAmount'], 2) ?></td>
         <td class="actions-cell text-end">
           <a href="edit_member.php?id=<?= urlencode($member['MemberID']) ?>">Edit</a>
+          <?php if (in_array($member['Status'], ['Pending', 'Suspended'], true) && Auth::adminRole() === 'admin'): ?>
+            <form method="post" action="delete_member.php" class="d-inline" onsubmit="return confirm('Archive and delete this <?= e($member['Status']) ?> member?');"><input type="hidden" name="member_id" value="<?= e($member['MemberID']) ?>"><button class="btn btn-link btn-sm text-danger p-0 ms-2" type="submit">Delete</button></form>
+          <?php endif; ?>
           <a href="#" data-bs-toggle="modal" data-bs-target="#memberTransactions<?= e($member['MemberID']) ?>">Transactions</a>
         </td>
       </tr>

@@ -127,5 +127,10 @@ function e($value): string
       </div>
     </section>
   </main>
+<script>
+const kinList=document.getElementById('nextOfKinList'), kinFields=[['name','Full Name','text'],['national_id','National ID','text'],['date_of_birth','Date of Birth','date'],['relationship','Relationship','text'],['phone','Phone','tel'],['allocation','Allocation (%)','number']];
+function addKin(){if(kinList.children.length>=3)return;const i=kinList.children.length,c=document.createElement('div');c.className='col-12 border rounded p-3';c.innerHTML='<div class="row g-3">'+kinFields.map(([k,l,t])=>'<div class="col-md-4"><label class="form-label">'+l+'</label><input class="form-control" name="next_of_kin['+i+']['+k+']" type="'+t+'" '+(k==='allocation'?'step="0.01" min="0.01" max="100"':'')+'></div>').join('')+'</div>';kinList.appendChild(c);document.getElementById('addNextOfKin').disabled=kinList.children.length>=3}
+document.getElementById('addNextOfKin').addEventListener('click',addKin);addKin();
+</script>
 </body>
 </html>

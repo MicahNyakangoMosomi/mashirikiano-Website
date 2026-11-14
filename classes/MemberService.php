@@ -39,13 +39,11 @@ class MemberService
                 'INSERT INTO members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Password, Status,
                  DateOfBirth, Gender, Nationality, MaritalStatus, PostalAddress, PhysicalAddress, Profession, Industry,
                  EmployerName, StaffPayrollNumber, EmploymentPosition, GrossMonthlyIncome, BusinessDetails,
-                 JoiningDate, NomineeName, NomineeNationalID,
-                 NomineeDateOfBirth, NomineeRelationship, NomineePhone, NomineeAllocation)
+                 JoiningDate)
                  VALUES (:member_id, :national_id, :first_name, :last_name, :phone, :email, :password, :status,
                  :DateOfBirth, :Gender, :Nationality, :MaritalStatus, :PostalAddress, :PhysicalAddress, :Profession, :Industry,
                  :EmployerName, :StaffPayrollNumber, :EmploymentPosition, :GrossMonthlyIncome, :BusinessDetails,
-                 :JoiningDate, :NomineeName, :NomineeNationalID,
-                 :NomineeDateOfBirth, :NomineeRelationship, :NomineePhone, :NomineeAllocation)'
+                 :JoiningDate)'
             );
             $stmt->execute([
                 ':member_id' => $memberId,
@@ -57,6 +55,7 @@ class MemberService
                 ':password' => $passwordHash,
                 ':status' => $status,
             ] + $profile);
+            self::saveNextOfKin($pdo, $memberId, $data['next_of_kin'] ?? []);
 
             $depositStmt = $pdo->prepare(
                 'INSERT INTO deposits (MemberID, RequiredAmount, PaidAmount, Balance, Status)
@@ -125,6 +124,7 @@ class MemberService
         $phone = self::cleanPhone($data['phone'] ?? '');
         $email = self::cleanEmail($data['email'] ?? '');
         $profile = self::profileValues($data);
+        $nextOfKin = $data['next_of_kin'] ?? [];
         $status = trim((string)($data['status'] ?? ''));
         $password = trim((string)($data['password'] ?? ''));
 
@@ -175,6 +175,16 @@ class MemberService
         );
         $stmt->execute($params);
 
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
+        try {
+            self::saveNextOfKin($pdo, $memberId, $nextOfKin);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            $pdo->rollBack();
+            throw $error;
+        }
+
         self::saveDocuments($memberId, $_FILES ?? [], Database::connection());
 
         self::linkUnmatchedContributions($memberId, $nationalId, $phone);
@@ -186,18 +196,49 @@ class MemberService
 
     private static function profileValues(array $data): array
     {
-        $columns = ['DateOfBirth','Gender','Nationality','MaritalStatus','PostalAddress','PhysicalAddress','Profession','Industry','EmployerName','StaffPayrollNumber','EmploymentPosition','GrossMonthlyIncome','BusinessDetails','JoiningDate','NomineeName','NomineeNationalID','NomineeDateOfBirth','NomineeRelationship','NomineePhone','NomineeAllocation'];
+        $columns = ['DateOfBirth','Gender','Nationality','MaritalStatus','PostalAddress','PhysicalAddress','Profession','Industry','EmployerName','StaffPayrollNumber','EmploymentPosition','GrossMonthlyIncome','BusinessDetails','JoiningDate'];
         $values = [];
         foreach ($columns as $column) $values[$column] = trim((string)($data[$column] ?? '')) ?: null;
 
         if ($values['GrossMonthlyIncome'] !== null && (!is_numeric($values['GrossMonthlyIncome']) || (float)$values['GrossMonthlyIncome'] <= 0)) {
             throw new InvalidArgumentException('Gross monthly income must be greater than zero.');
         }
-        if ($values['NomineeAllocation'] !== null && (!is_numeric($values['NomineeAllocation']) || (float)$values['NomineeAllocation'] <= 0 || (float)$values['NomineeAllocation'] > 100)) {
-            throw new InvalidArgumentException('Nominee allocation must be greater than zero and no more than 100%.');
-        }
-
         return $values;
+    }
+
+    private static function saveNextOfKin(PDO $pdo, string $memberId, array $items): void
+    {
+        if (count($items) > 3) throw new InvalidArgumentException('A member can have no more than 3 next of kin.');
+        $pdo->prepare('DELETE FROM next_of_kin WHERE MemberID = ?')->execute([$memberId]);
+        $stmt = $pdo->prepare('INSERT INTO next_of_kin (MemberID, FullName, NationalID, DateOfBirth, Relationship, Phone, Allocation) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        foreach ($items as $item) {
+            if (!is_array($item)) continue;
+            $values = array_map(static fn($key) => trim((string)($item[$key] ?? '')), ['name','national_id','date_of_birth','relationship','phone','allocation']);
+            if (!array_filter($values, static fn($value) => $value !== '')) continue;
+            if ($values[0] === '' || $values[3] === '' || $values[4] === '') throw new InvalidArgumentException('Each next of kin needs a name, relationship, and phone number.');
+            if ($values[5] !== '' && (!is_numeric($values[5]) || (float)$values[5] <= 0 || (float)$values[5] > 100)) throw new InvalidArgumentException('Next of kin allocation must be greater than zero and no more than 100%.');
+            $stmt->execute([$memberId, $values[0], $values[1] ?: null, $values[2] ?: null, $values[3], $values[4], $values[5] === '' ? null : $values[5]]);
+        }
+    }
+
+    public static function deleteMember(string $memberId, int $adminId): void
+    {
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare('SELECT * FROM members WHERE MemberID = ? FOR UPDATE');
+            $stmt->execute([$memberId]);
+            $member = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$member) throw new RuntimeException('Member not found.');
+            if (!in_array($member['Status'], ['Pending', 'Suspended'], true)) throw new RuntimeException('Only pending or suspended members can be deleted.');
+            $archive = $pdo->prepare('INSERT INTO deleted_members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Status, CreatedAt, MemberData, DeletedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $archive->execute([$member['MemberID'], $member['NationalID'], $member['FirstName'], $member['LastName'], $member['PrimaryNumber'], $member['Email'], $member['Status'], $member['CreatedAt'], json_encode($member, JSON_THROW_ON_ERROR), $adminId]);
+            $pdo->prepare('DELETE FROM members WHERE MemberID = ?')->execute([$memberId]);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            $pdo->rollBack();
+            throw $error;
+        }
     }
 
     private static function saveDocuments(string $memberId, array $files, PDO $pdo, array &$savedDocuments = []): void
