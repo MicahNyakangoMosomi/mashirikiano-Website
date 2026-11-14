@@ -148,25 +148,42 @@ class Mpesa
                         throw new RuntimeException('Loan repayment account is not linked to a SACCO member.');
                     }
 
-                    $repaymentResult = ['status' => 'loan_not_active'];
-                    if (in_array(strtoupper((string)$activeLoan['loanStatus']), ['ACTIVE', 'IN_ARREARS'], true)) {
-                        $repaymentResult = LoanService::processRepayment(
+                    $pdo->beginTransaction();
+                    try {
+                        $loanReceiptStmt = $pdo->prepare("SELECT repayment_account FROM loan_transaction WHERE mpesaReceiptNumber = :receipt AND transactionType = 'REPAYMENT' LIMIT 1");
+                        $loanReceiptStmt->execute([':receipt' => $data['TranID']]);
+                        $processedAccount = $loanReceiptStmt->fetchColumn();
+                        if ($processedAccount !== false && strtoupper((string)$processedAccount) !== $billRef) {
+                            throw new RuntimeException('M-Pesa receipt is already linked to another loan account.');
+                        }
+
+                        $repaymentResult = ['status' => 'already_processed'];
+                        if ($processedAccount === false && in_array(strtoupper((string)$activeLoan['loanStatus']), ['ACTIVE', 'IN_ARREARS'], true)) {
+                            $repaymentResult = LoanService::processRepayment(
+                                $pdo,
+                                $billRef,
+                                (float)$data['Amount'],
+                                $data['TranID'],
+                                date('Y-m-d', strtotime($data['TranTime'] ?: 'now'))
+                            );
+                        }
+
+                        self::insertLedgerTransaction(
                             $pdo,
-                            $billRef,
+                            $data,
+                            $loanMember,
                             (float)$data['Amount'],
-                            $data['TranID'],
-                            date('Y-m-d', strtotime($data['TranTime'] ?: 'now'))
+                            'loan_repayment',
+                            'loan_repayment',
+                            'Loan repayment for account ' . $billRef
                         );
+                        $pdo->commit();
+                    } catch (Throwable $error) {
+                        if ($pdo->inTransaction()) {
+                            $pdo->rollBack();
+                        }
+                        throw $error;
                     }
-                    self::insertLedgerTransaction(
-                        $pdo,
-                        $data,
-                        $loanMember,
-                        (float)$data['Amount'],
-                        'loan_repayment',
-                        'loan_repayment',
-                        'Loan repayment for account ' . $billRef
-                    );
 
                     return [
                         'status' => 'recorded',
