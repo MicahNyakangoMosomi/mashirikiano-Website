@@ -1,9 +1,8 @@
 -- Reset loan records and loan repayment ledger rows while preserving members,
 -- deposits, non-loan M-Pesa transactions, and unrelated member ledger rows.
 --
--- SAFETY: This script ends with ROLLBACK. Review the preview results and take
--- a database backup first. To apply the reset, change the final ROLLBACK to
--- COMMIT, then run the script again.
+-- Review the preview results and take a database backup before executing this
+-- script against the live database. The reset is committed at the end.
 
 USE `mashirikianosacc_mashirikiano`;
 
@@ -43,6 +42,4 @@ DELETE FROM `loan_application`;
 -- Remove the loan product catalog so setup can start from a blank catalog.
 DELETE FROM `loan`;
 
--- Safe default: nothing is permanently changed until this is replaced with
--- COMMIT after reviewing the preview and confirming a backup exists.
-ROLLBACK;
+COMMIT;
