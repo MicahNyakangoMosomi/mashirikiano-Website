@@ -135,7 +135,7 @@ class Mpesa
                 $activeLoan = $lStmt->fetch();
 
                 if ($activeLoan) {
-                    $loanMember = self::findMemberById((string)$activeLoan['memberID']);
+                    $loanMember = self::findMemberByLoanAccount($pdo, $billRef);
                     if (!$loanMember) {
                         $applicationStmt = $pdo->prepare('SELECT memberID FROM loan_application WHERE loanApplicationID = :application_id LIMIT 1');
                         $applicationStmt->execute([':application_id' => $activeLoan['loanApplicationID']]);
@@ -189,12 +189,19 @@ class Mpesa
                         throw $error;
                     }
 
-                    if (!empty($loanMember['PrimaryNumber'])) {
+                    $smsSent = false;
+                    $smsMember = self::findMemberByLoanAccount($pdo, $billRef);
+                    if ($smsMember && !empty($smsMember['PrimaryNumber'])) {
                         $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
                         $receipt = $data['TranID'] ?: $billRef;
                         $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
-                        $message = "Dear {$loanMember['FirstName']}, we have received your loan repayment of KES " . number_format((float)$data['Amount'], 2) . " on {$paymentDate}. Receipt: {$receipt}. Check your loan status here: {$portalUrl}";
-                        SmsService::sendSms((string)$loanMember['PrimaryNumber'], $message);
+                        $message = "Dear {$smsMember['FirstName']}, we have received your loan repayment of KES " . number_format((float)$data['Amount'], 2) . " on {$paymentDate}. Receipt: {$receipt}. Check your loan status here: {$portalUrl}";
+                        $smsSent = SmsService::sendSms((string)$smsMember['PrimaryNumber'], $message);
+                        if (!$smsSent) {
+                            error_log('Loan repayment confirmation SMS failed for account ' . $billRef . ', member ' . $smsMember['MemberID']);
+                        }
+                    } else {
+                        error_log('Loan repayment confirmation SMS skipped: no member phone resolved for account ' . $billRef);
                     }
 
                     return [
@@ -204,6 +211,7 @@ class Mpesa
                         'tran_id' => $data['TranID'],
                         'member_id' => $loanMember['MemberID'],
                         'loan_repayment' => $repaymentResult,
+                        'sms_sent' => $smsSent,
                         'data' => $data,
                     ];
                 }
@@ -519,6 +527,18 @@ class Mpesa
         }
 
         return null;
+    }
+
+    private static function findMemberByLoanAccount(PDO $pdo, string $repaymentAccount): ?array
+    {
+        $stmt = $pdo->prepare('SELECT m.MemberID, m.FirstName, m.LastName, m.PrimaryNumber
+            FROM active_loan al
+            JOIN members m ON m.MemberID = al.memberID
+            WHERE al.repayment_account = :account
+            LIMIT 1');
+        $stmt->execute([':account' => $repaymentAccount]);
+
+        return $stmt->fetch() ?: null;
     }
 
     /**
