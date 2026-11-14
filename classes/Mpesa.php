@@ -189,22 +189,6 @@ class Mpesa
                         throw $error;
                     }
 
-                    $smsSent = false;
-                    $smsMember = self::findMemberByLoanAccount($pdo, $billRef);
-                    $smsPhone = trim((string)($smsMember['PrimaryNumber'] ?? '')) ?: trim((string)$data['MSISDN']);
-                    if ($smsMember && $smsPhone !== '') {
-                        $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
-                        $receipt = $data['TranID'] ?: $billRef;
-                        $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
-                        $message = "Dear {$smsMember['FirstName']}, we have received your loan repayment of KES " . number_format((float)$data['Amount'], 2) . " on {$paymentDate}. Receipt: {$receipt}. Check your loan status here: {$portalUrl}";
-                        $smsSent = SmsService::sendSms($smsPhone, $message);
-                        if (!$smsSent) {
-                            error_log('Loan repayment confirmation SMS failed for account ' . $billRef . ', member ' . $smsMember['MemberID'] . ', recipient ' . SmsService::normalizePhone($smsPhone));
-                        }
-                    } else {
-                        error_log('Loan repayment confirmation SMS skipped: no member phone resolved for account ' . $billRef);
-                    }
-
                     return [
                         'status' => 'recorded',
                         'type' => 'loan_repayment',
@@ -212,7 +196,6 @@ class Mpesa
                         'tran_id' => $data['TranID'],
                         'member_id' => $loanMember['MemberID'],
                         'loan_repayment' => $repaymentResult,
-                        'sms_sent' => $smsSent,
                         'data' => $data,
                     ];
                 }
@@ -530,8 +513,11 @@ class Mpesa
         return null;
     }
 
+
+    // gets the member's details based on the loan repayment account number
     private static function findMemberByLoanAccount(PDO $pdo, string $repaymentAccount): ?array
     {
+
         $stmt = $pdo->prepare('SELECT m.MemberID, m.FirstName, m.LastName, m.PrimaryNumber
             FROM active_loan al
             JOIN members m ON m.MemberID = al.memberID

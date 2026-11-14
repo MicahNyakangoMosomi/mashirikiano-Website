@@ -63,6 +63,40 @@ try {
      */
     $result = Mpesa::recordC2BCallback($payload);
 
+    if (($result['status'] ?? '') === 'recorded' && ($result['type'] ?? '') === 'loan_repayment' && isset($result['data'])) {
+        $data = $result['data'];
+        $accountNumber = trim((string)($data['AccountNumber'] ?? ''));
+        $pdo = Database::connection();
+        $memberStmt = $pdo->prepare('SELECT m.MemberID, m.FirstName, m.PrimaryNumber
+            FROM active_loan al
+            JOIN members m ON m.MemberID = al.memberID
+            WHERE al.repayment_account = :account
+            LIMIT 1');
+        $memberStmt->execute([':account' => $accountNumber]);
+        $repaymentMember = $memberStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+        if (!$repaymentMember && !empty($result['member_id'])) {
+            $memberStmt = $pdo->prepare('SELECT MemberID, FirstName, PrimaryNumber FROM members WHERE MemberID = :member_id LIMIT 1');
+            $memberStmt->execute([':member_id' => $result['member_id']]);
+            $repaymentMember = $memberStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+
+        $smsPhone = trim((string)($repaymentMember['PrimaryNumber'] ?? '')) ?: trim((string)($data['MSISDN'] ?? ''));
+        if ($repaymentMember && $smsPhone !== '') {
+            $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
+            $receipt = trim((string)($data['TranID'] ?? ''));
+            $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
+            $smsMessage = "Dear {$repaymentMember['FirstName']}, we have received your loan repayment of KES " . number_format((float)$data['Amount'], 2) . " on {$paymentDate}. Receipt: {$receipt}. Check your loan status here: {$portalUrl}";
+            $result['sms_sent'] = SmsService::sendSms($smsPhone, $smsMessage);
+            if (!$result['sms_sent']) {
+                error_log('Loan repayment SMS failed for account ' . $accountNumber . ', member ' . $repaymentMember['MemberID'] . ', recipient ' . SmsService::normalizePhone($smsPhone));
+            }
+        } else {
+            $result['sms_sent'] = false;
+            error_log('Loan repayment SMS skipped: member or phone could not be resolved for account ' . $accountNumber);
+        }
+    }
+
     if (isset($result['status']) && $result['status'] === 'recorded' && isset($result['data']) && ($result['type'] ?? '') !== 'loan_repayment') {
         $data = $result['data'];
         $amount = number_format($data['Amount'], 2);
@@ -182,6 +216,7 @@ try {
         // $allocationText = $allocation ? ' Allocation: ' . implode(', ', $allocation) . '.' : '';
 
         $tranDate = !empty($data['TranTime']) ? date('d-M-Y', strtotime($data['TranTime'])) : date('d-M-Y');
+        // Compose SMS message with transaction details and updated wallet balances
         $smsMessage = "Confirmed. KES {$amount} credited to {$fullName} (Account {$accountNumber}) Ref {$tranId} on {$tranDate}. Total savings: KES " . number_format($akibaWallet, 2) . ". Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
@@ -204,7 +239,8 @@ try {
 
     echo json_encode([
         'ResultCode' => 0,
-        'ResultDesc' => $result['message'] ?? 'Accepted'
+        'ResultDesc' => $result['message'] ?? 'Accepted',
+        'SmsSent' => $result['sms_sent'] ?? null,
     ]);
 
 } catch (Throwable $e) {
