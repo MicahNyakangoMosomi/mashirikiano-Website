@@ -491,7 +491,9 @@ class LoanService
      */
     public static function catchUpInterest(PDO $pdo, int $activeLoanId): array
     {
-        self::ensureTables($pdo);
+        if (!$pdo->inTransaction()) {
+            self::ensureTables($pdo);
+        }
 
         $loanStmt = $pdo->prepare("SELECT * FROM active_loan WHERE activeLoanID = :id FOR UPDATE");
         $loanStmt->execute([':id' => $activeLoanId]);
@@ -592,7 +594,10 @@ class LoanService
         ?string $mpesaReceiptNumber = null,
         ?string $transactionDate = null
     ): array {
-        self::ensureTables($pdo);
+        $wasInTx = $pdo->inTransaction();
+        if (!$wasInTx) {
+            self::ensureTables($pdo);
+        }
 
         $transactionDate = $transactionDate ?: date('Y-m-d');
         $repaymentAccount = strtoupper(trim($repaymentAccount));

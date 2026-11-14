@@ -181,6 +181,9 @@ class Mpesa
                                 'Loan repayment for account ' . $billRef
                             );
                         }
+                        if (!$pdo->inTransaction()) {
+                            throw new RuntimeException('Loan repayment transaction ended before ledger commit.');
+                        }
                         $pdo->commit();
                     } catch (Throwable $error) {
                         if ($pdo->inTransaction()) {
