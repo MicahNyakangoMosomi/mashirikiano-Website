@@ -15,7 +15,16 @@ if (!function_exists('admin_header')) {
             'register_member' => ['label' => 'Register Member', 'url' => 'register_member'],
             'manage_jobs' => ['label' => 'Manage Jobs', 'url' => 'manage_jobs'],
             'reports' => ['label' => 'Reports', 'url' => 'reports'],
-            'members' => ['label' => 'Members', 'url' => 'members'],
+            'members' => [
+                'label' => 'Members',
+                'url' => 'members.php?status=Active',
+                'sub' => [
+                    'members_active' => ['label' => 'Active', 'url' => 'members.php?status=Active'],
+                    'members_pending' => ['label' => 'Pending', 'url' => 'members.php?status=Pending'],
+                    'members_suspended' => ['label' => 'Suspended', 'url' => 'members.php?status=Suspended'],
+                    'members_deleted' => ['label' => 'Deleted', 'url' => 'members.php?status=Deleted'],
+                ],
+            ],
             'loans' => [
                 'label' => 'Loans',
                 'url' => 'loans_manage',

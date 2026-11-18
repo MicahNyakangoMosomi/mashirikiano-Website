@@ -405,7 +405,7 @@ function renderPagination(int $currentPage, int $totalPages): string
   </style>
 </head>
 <body>
-  <?php admin_header('members', 'Member Management'); ?>
+  <?php admin_header('members_' . strtolower($statusFilter), 'Member Management'); ?>
 
   <main class="container-fluid admin-shell py-4">
     <?php if ($message): ?>
@@ -432,12 +432,6 @@ function renderPagination(int $currentPage, int $totalPages): string
         <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Penalty Collected</div><div class="h3 fw-bold mb-0">KES <?= number_format((float)$penaltyStats['Collected'], 2) ?></div><div class="small text-muted">Assessed: KES <?= number_format((float)$penaltyStats['Assessed'], 2) ?></div></div></div>
       </div>
     </div>
-
-    <nav class="nav nav-pills mb-3" aria-label="Member status">
-      <?php foreach (['Active' => 'Active', 'Pending' => 'Pending', 'Suspended' => 'Suspended', 'Deleted' => 'Deleted'] as $statusKey => $statusLabel): ?>
-        <a class="nav-link <?= $statusFilter === $statusKey ? 'active' : '' ?>" href="members.php?<?= e(http_build_query(['status' => $statusKey])) ?>"><?= e($statusLabel) ?></a>
-      <?php endforeach; ?>
-    </nav>
 
     <section class="card panel mb-4">
       <div class="card-body">
