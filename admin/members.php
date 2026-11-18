@@ -35,6 +35,10 @@ try {
     $pdo->query('SELECT 1 FROM SaccoWallets LIMIT 1');
     $pdo->query('SELECT 1 FROM deleted_members LIMIT 1');
     $pdo->query('SELECT 1 FROM member_penalties LIMIT 1');
+    $memberStatusEnum = (string)$pdo->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'members' AND COLUMN_NAME = 'Status'")->fetchColumn();
+    if (!str_contains($memberStatusEnum, "'Deleted'")) {
+        throw new RuntimeException('The members.Status column needs the deleted member archive migration.');
+    }
 } catch (Throwable $error) {
     error_log('Admin dashboard setup error: ' . $error->getMessage());
     ?>
@@ -58,7 +62,8 @@ try {
             <p>Run the listed migrations in phpMyAdmin, then reload this page:</p>
             <pre class="bg-light p-3 rounded">database/financial_workflow_migration.sql</pre>
             <pre class="bg-light p-3 rounded">database/member_next_of_kin_and_deletion_migration.sql
-database/member_penalties_migration.sql</pre>
+database/member_penalties_migration.sql
+database/member_archive_preserve_migration.sql</pre>
             <p class="mb-0">If the migration keeps failing, open the migration file and run the required table SQL manually.</p>
           </div>
         </section>

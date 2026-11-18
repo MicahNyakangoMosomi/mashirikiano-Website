@@ -85,7 +85,7 @@ try {
         }
 
         $smsPhone = trim((string)($repaymentMember['PrimaryNumber'] ?? ''));
-        if ($repaymentMember && $smsPhone !== '' && ($repaymentMember['Status'] ?? '') !== 'Suspended') {
+        if ($repaymentMember && $smsPhone !== '' && !in_array(($repaymentMember['Status'] ?? ''), ['Suspended', 'Deleted'], true)) {
             $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
             $receipt = trim((string)($data['TranID'] ?? ''));
             $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
@@ -228,7 +228,7 @@ try {
         $smsMessage = "Confirmed. KES {$amount} credited to {$fullName} (Account {$accountNumber}) Ref {$tranId} on {$tranDate}. Total savings: KES " . number_format($akibaWallet, 2) . ". Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
-        if ($memberPhone !== '' && ($memberData['Status'] ?? '') !== 'Suspended') {
+        if ($memberPhone !== '' && !in_array(($memberData['Status'] ?? ''), ['Suspended', 'Deleted'], true)) {
             SmsService::sendSms($memberPhone, $smsMessage);
         } else {
             file_put_contents(

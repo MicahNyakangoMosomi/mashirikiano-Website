@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS `members` (
   `PrimaryNumber` VARCHAR(20) NOT NULL,
   `Email` VARCHAR(150) NULL,
   `Password` VARCHAR(255) NOT NULL,
-  `Status` ENUM('Active','Suspended','Pending') NOT NULL DEFAULT 'Pending',
+  `Status` ENUM('Active','Suspended','Pending','Deleted') NOT NULL DEFAULT 'Pending',
   `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`MemberID`),
   UNIQUE KEY `uniq_members_national_id` (`NationalID`),

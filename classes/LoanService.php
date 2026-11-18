@@ -738,7 +738,7 @@ class LoanService
             }
 
             // Send repayment confirmation SMS
-            if (!$wasInTx && $member && !empty($member['PrimaryNumber']) && ($member['Status'] ?? '') !== 'Suspended') {
+            if (!$wasInTx && $member && !empty($member['PrimaryNumber']) && !in_array(($member['Status'] ?? ''), ['Suspended', 'Deleted'], true)) {
                 $totalOwedAfter = round($principalAfter + $newBilled + $accruedInterestAfter + $newPenalty, 2);
                 $paymentDate = date('d M Y', strtotime($transactionDate));
                 $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';

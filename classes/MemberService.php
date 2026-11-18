@@ -236,7 +236,9 @@ class MemberService
             if (!in_array($member['Status'], ['Pending', 'Suspended'], true)) throw new RuntimeException('Only pending or suspended members can be deleted.');
             $archive = $pdo->prepare('INSERT INTO deleted_members (MemberID, NationalID, FirstName, LastName, PrimaryNumber, Email, Status, CreatedAt, MemberData, DeletedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $archive->execute([$member['MemberID'], $member['NationalID'], $member['FirstName'], $member['LastName'], $member['PrimaryNumber'], $member['Email'], $member['Status'], $member['CreatedAt'], json_encode($member, JSON_THROW_ON_ERROR), $adminId]);
-            $pdo->prepare('DELETE FROM members WHERE MemberID = ?')->execute([$memberId]);
+            // Keep the member row in place so transactions, deposits, wallets,
+            // withdrawals, loans, and other foreign-key data remain intact.
+            $pdo->prepare("UPDATE members SET Status = 'Deleted' WHERE MemberID = ?")->execute([$memberId]);
             $pdo->commit();
         } catch (Throwable $error) {
             $pdo->rollBack();
@@ -261,12 +263,23 @@ class MemberService
             if (!is_array($memberData) || empty($memberData['MemberID'])) {
                 throw new RuntimeException('Archived member data is incomplete and cannot be restored.');
             }
-            if (isset($memberData['Status'])) $memberData['Status'] = 'Active';
-            $columns = array_keys($memberData);
-            $quotedColumns = implode(', ', array_map(static fn($column) => '`' . str_replace('`', '``', $column) . '`', $columns));
-            $placeholders = implode(', ', array_fill(0, count($columns), '?'));
-            $restore = $pdo->prepare("INSERT INTO members ({$quotedColumns}) VALUES ({$placeholders})");
-            $restore->execute(array_values($memberData));
+            $liveMemberStmt = $pdo->prepare('SELECT Status FROM members WHERE MemberID = ? FOR UPDATE');
+            $liveMemberStmt->execute([$memberData['MemberID']]);
+            $liveStatus = $liveMemberStmt->fetchColumn();
+            if ($liveStatus !== false) {
+                if ($liveStatus !== 'Deleted') {
+                    throw new RuntimeException('This member already exists and is not marked Deleted.');
+                }
+                $pdo->prepare("UPDATE members SET Status = 'Active' WHERE MemberID = ?")->execute([$memberData['MemberID']]);
+            } else {
+                // Support deleted records created before deletion became a soft archive.
+                if (isset($memberData['Status'])) $memberData['Status'] = 'Active';
+                $columns = array_keys($memberData);
+                $quotedColumns = implode(', ', array_map(static fn($column) => '`' . str_replace('`', '``', $column) . '`', $columns));
+                $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+                $restore = $pdo->prepare("INSERT INTO members ({$quotedColumns}) VALUES ({$placeholders})");
+                $restore->execute(array_values($memberData));
+            }
 
             if ($penaltyAmount > 0) {
                 $penalty = $pdo->prepare('INSERT INTO member_penalties (MemberID, Amount, Reason, RestoredBy) VALUES (?, ?, ?, ?)');

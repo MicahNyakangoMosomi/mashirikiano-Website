@@ -15,7 +15,7 @@ USE `mashirikianosacc_mashirikiano`;
 
 ALTER TABLE `members`
   MODIFY `MemberID` VARCHAR(40) NOT NULL,
-  MODIFY `Status` ENUM('Active','Suspended','Pending') NOT NULL DEFAULT 'Pending';
+  MODIFY `Status` ENUM('Active','Suspended','Pending','Deleted') NOT NULL DEFAULT 'Pending';
 
 SET @members_national_idx_exists := (
   SELECT COUNT(*)
