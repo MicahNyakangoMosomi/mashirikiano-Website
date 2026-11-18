@@ -65,7 +65,7 @@ if (($_GET['download'] ?? '') === 'pdf') {
     SimplePdfTable::download(
         'members-report.pdf',
         'Members Report',
-        ['MemberID', 'Name', 'Phone', 'Email', 'NationalID', 'Status', 'Deposit Bal.', 'Created', 'Akiba Amount', 'Ushirika Amount'],
+        ['MemberID', 'Name', 'Phone', 'Email', 'NationalID', 'Status', 'Deposit Bal.', 'Created', 'Current Akiba', 'Ushirika Amount'],
         array_map(static function (array $member): array {
             return [
                 (string)$member['MemberID'],
@@ -76,7 +76,7 @@ if (($_GET['download'] ?? '') === 'pdf') {
                 (string)$member['Status'],
                 number_format((float)($member['Balance'] ?? 0), 2),
                 (string)$member['CreatedAt'],
-                number_format((float)$member['AkibaAmount'], 2),
+                number_format((float)$member['CurrentAkiba'], 2),
                 number_format((float)$member['UshirikaAmount'], 2),
             ];
         }, $pdfMembers),
@@ -156,7 +156,7 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
 
     $stmt = $pdo->prepare(
         "SELECT m.*, d.RequiredAmount, d.PaidAmount, d.Balance, d.Status AS DepositStatus,
-            COALESCE(wallets.AkibaAmount, 0) AS AkibaAmount,
+            GREATEST(0.00, COALESCE(wallets.AkibaAmount, 0) - COALESCE(withdrawals.TotalWithdrawals, 0)) AS CurrentAkiba,
             COALESCE(wallets.UshirikaAmount, 0) AS UshirikaAmount
          FROM members m
          LEFT JOIN deposits d ON d.MemberID = m.MemberID
@@ -166,6 +166,11 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
             WHERE MemberID IS NOT NULL
             GROUP BY MemberID
          ) wallets ON wallets.MemberID = m.MemberID
+         LEFT JOIN (
+            SELECT MemberID, SUM(Amount) AS TotalWithdrawals
+            FROM withdrawals
+            GROUP BY MemberID
+         ) withdrawals ON withdrawals.MemberID = m.MemberID
          {$whereSql}
          ORDER BY m.FirstName ASC, m.LastName ASC, m.MemberID ASC
          LIMIT {$limit} OFFSET {$offset}"
@@ -209,7 +214,7 @@ function loadMembersForPdf(PDO $pdo, string $search): array
 
     $stmt = $pdo->prepare(
         "SELECT m.*, d.Balance,
-            COALESCE(wallets.AkibaAmount, 0) AS AkibaAmount,
+            GREATEST(0.00, COALESCE(wallets.AkibaAmount, 0) - COALESCE(withdrawals.TotalWithdrawals, 0)) AS CurrentAkiba,
             COALESCE(wallets.UshirikaAmount, 0) AS UshirikaAmount
          FROM members m
          LEFT JOIN deposits d ON d.MemberID = m.MemberID
@@ -219,6 +224,11 @@ function loadMembersForPdf(PDO $pdo, string $search): array
             WHERE MemberID IS NOT NULL
             GROUP BY MemberID
          ) wallets ON wallets.MemberID = m.MemberID
+         LEFT JOIN (
+            SELECT MemberID, SUM(Amount) AS TotalWithdrawals
+            FROM withdrawals
+            GROUP BY MemberID
+         ) withdrawals ON withdrawals.MemberID = m.MemberID
          {$whereSql}
          ORDER BY m.FirstName ASC, m.LastName ASC, m.MemberID ASC"
     );
@@ -240,7 +250,7 @@ function renderMemberRows(array $members): string
         <td><span class="badge text-bg-<?= $member['Status'] === 'Active' ? 'success' : ($member['Status'] === 'Suspended' ? 'danger' : 'secondary') ?>"><?= e($member['Status']) ?></span></td>
         <td><?= number_format((float)($member['Balance'] ?? 0), 2) ?></td>
         <td><?= e($member['CreatedAt']) ?></td>
-        <td class="text-end fw-semibold wallet-akiba"><?= number_format((float)$member['AkibaAmount'], 2) ?></td>
+        <td class="text-end fw-semibold wallet-akiba"><?= number_format((float)$member['CurrentAkiba'], 2) ?></td>
         <td class="text-end fw-semibold wallet-ushirika"><?= number_format((float)$member['UshirikaAmount'], 2) ?></td>
         <td class="actions-cell text-end">
           <a href="edit_member.php?id=<?= urlencode($member['MemberID']) ?>">Edit</a>
@@ -432,7 +442,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         </div>
         <div class="table-responsive">
           <table class="table align-middle">
-            <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end wallet-akiba">Akiba Amount</th><th class="text-end wallet-ushirika">Ushirika Amount</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end wallet-akiba">Current Akiba</th><th class="text-end wallet-ushirika">Ushirika Amount</th><th class="text-end">Actions</th></tr></thead>
             <tbody id="membersTableBody">
               <?= renderMemberRows($members) ?>
             </tbody>
