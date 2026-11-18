@@ -69,13 +69,13 @@ try {
         $pdo = Database::connection();
         $repaymentMember = null;
         if (!empty($result['member_id'])) {
-            $memberStmt = $pdo->prepare('SELECT MemberID, FirstName, PrimaryNumber FROM members WHERE MemberID = :member_id LIMIT 1');
+            $memberStmt = $pdo->prepare('SELECT MemberID, FirstName, PrimaryNumber, Status FROM members WHERE MemberID = :member_id LIMIT 1');
             $memberStmt->execute([':member_id' => $result['member_id']]);
             $repaymentMember = $memberStmt->fetch(PDO::FETCH_ASSOC) ?: null;
         }
 
         if (!$repaymentMember && $accountNumber !== '') {
-            $memberStmt = $pdo->prepare('SELECT m.MemberID, m.FirstName, m.PrimaryNumber
+            $memberStmt = $pdo->prepare('SELECT m.MemberID, m.FirstName, m.PrimaryNumber, m.Status
                 FROM active_loan al
                 JOIN members m ON m.MemberID = al.memberID
                 WHERE UPPER(al.repayment_account) = UPPER(:account)
@@ -85,7 +85,7 @@ try {
         }
 
         $smsPhone = trim((string)($repaymentMember['PrimaryNumber'] ?? ''));
-        if ($repaymentMember && $smsPhone !== '') {
+        if ($repaymentMember && $smsPhone !== '' && ($repaymentMember['Status'] ?? '') !== 'Suspended') {
             $paymentDate = date('d M Y', strtotime($data['TranTime'] ?: 'now'));
             $receipt = trim((string)($data['TranID'] ?? ''));
             $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
@@ -116,7 +116,7 @@ try {
         // Fetch member phone number using the account reference for SMS notification
         $pdo = Database::connection();
         // Use a prepared statement to resolve the member for SMS notification.
-        $memberStmt = $pdo->prepare('SELECT PrimaryNumber, FirstName, LastName FROM members WHERE NationalID = :account_number OR MemberID = :member_id LIMIT 1');
+        $memberStmt = $pdo->prepare('SELECT PrimaryNumber, FirstName, LastName, Status FROM members WHERE NationalID = :account_number OR MemberID = :member_id LIMIT 1');
 
         // Execute the statement with the provided national ID
         $memberStmt->execute([':account_number' => $accountNumber, ':member_id' => $accountNumber]);
@@ -228,7 +228,7 @@ try {
         $smsMessage = "Confirmed. KES {$amount} credited to {$fullName} (Account {$accountNumber}) Ref {$tranId} on {$tranDate}. Total savings: KES " . number_format($akibaWallet, 2) . ". Shares: KES " . number_format($totalUshirika, 2) . ". For queries call 0758500557.";
         
         require_once __DIR__ . '/../classes/SmsService.php';
-        if ($memberPhone !== '') {
+        if ($memberPhone !== '' && ($memberData['Status'] ?? '') !== 'Suspended') {
             SmsService::sendSms($memberPhone, $smsMessage);
         } else {
             file_put_contents(

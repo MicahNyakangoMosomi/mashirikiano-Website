@@ -9,7 +9,15 @@ Auth::requireAdmin();
 
 $message = '';
 $messageType = 'info';
+Auth::startSession();
+if (!empty($_SESSION['flash_message'])) {
+    $message = (string)$_SESSION['flash_message'];
+    $messageType = (string)($_SESSION['flash_message_type'] ?? 'info');
+    unset($_SESSION['flash_message'], $_SESSION['flash_message_type']);
+}
 $search = trim($_GET['search'] ?? '');
+$statusFilter = (string)($_GET['status'] ?? 'Active');
+if (!in_array($statusFilter, ['Active', 'Pending', 'Suspended', 'Deleted'], true)) $statusFilter = 'Active';
 $allowedLimits = [5, 10, 25, 50];
 $rowLimit = (int)($_GET['limit'] ?? 10);
 if (!in_array($rowLimit, $allowedLimits, true)) {
@@ -25,6 +33,8 @@ try {
     $pdo->query('SELECT 1 FROM deposits LIMIT 1');
     $pdo->query('SELECT 1 FROM member_transactions LIMIT 1');
     $pdo->query('SELECT 1 FROM SaccoWallets LIMIT 1');
+    $pdo->query('SELECT 1 FROM deleted_members LIMIT 1');
+    $pdo->query('SELECT 1 FROM member_penalties LIMIT 1');
 } catch (Throwable $error) {
     error_log('Admin dashboard setup error: ' . $error->getMessage());
     ?>
@@ -45,8 +55,10 @@ try {
             <div class="alert alert-warning">
               <?= htmlspecialchars($error->getMessage(), ENT_QUOTES, 'UTF-8') ?>
             </div>
-            <p>Run the migration in phpMyAdmin, then reload this page:</p>
+            <p>Run the listed migrations in phpMyAdmin, then reload this page:</p>
             <pre class="bg-light p-3 rounded">database/financial_workflow_migration.sql</pre>
+            <pre class="bg-light p-3 rounded">database/member_next_of_kin_and_deletion_migration.sql
+database/member_penalties_migration.sql</pre>
             <p class="mb-0">If the migration keeps failing, open the migration file and run the required table SQL manually.</p>
           </div>
         </section>
@@ -58,10 +70,17 @@ try {
 }
 
 
-[$members, $memberTransactions, $totalMembers, $totalPages, $currentPage] = loadMembers($pdo, $search, $rowLimit, $currentPage);
+[$members, $memberTransactions, $totalMembers, $totalPages, $currentPage] = loadMembers($pdo, $search, $rowLimit, $currentPage, $statusFilter);
+$deletedMembers = [];
+if ($statusFilter === 'Deleted') {
+    $deletedStmt = $pdo->prepare('SELECT DeletedMemberID, MemberID, NationalID, FirstName, LastName, PrimaryNumber, Status, DeletedAt FROM deleted_members WHERE (? = "" OR MemberID LIKE ? OR FirstName LIKE ? OR LastName LIKE ? OR CONCAT(FirstName, " ", LastName) LIKE ? OR NationalID LIKE ?) ORDER BY DeletedAt DESC');
+    $likeSearch = '%' . $search . '%';
+    $deletedStmt->execute([$search, $likeSearch, $likeSearch, $likeSearch, $likeSearch, $likeSearch]);
+    $deletedMembers = $deletedStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 if (($_GET['download'] ?? '') === 'pdf') {
-    $pdfMembers = loadMembersForPdf($pdo, $search);
+    $pdfMembers = loadMembersForPdf($pdo, $search, $statusFilter);
     SimplePdfTable::download(
         'members-report.pdf',
         'Members Report',
@@ -118,6 +137,7 @@ $depositStats = $pdo->query(
     'SELECT COALESCE(SUM(PaidAmount), 0) AS TotalDeposits, COALESCE(SUM(Balance), 0) AS TotalDepositBalance
      FROM deposits'
 )->fetch();
+$penaltyStats = $pdo->query('SELECT COALESCE(SUM(Amount), 0) AS Assessed, COALESCE(SUM(PaidAmount), 0) AS Collected FROM member_penalties')->fetch();
 
 $pendingContributions = $pdo->query(
     'SELECT AccountNumber, FirstName, LastName, MSISDN, COUNT(*) AS ContributionCount, SUM(Amount) AS TotalAmount
@@ -137,13 +157,14 @@ function e($value): string
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
-function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
+function loadMembers(PDO $pdo, string $search, int $limit, int $page, string $status): array
 {
-    $whereSql = '';
-    $params = [];
+    if ($status === 'Deleted') return [[], [], 0, 1, 1];
+    $whereSql = 'WHERE m.Status = :status';
+    $params = [':status' => $status];
 
     if ($search !== '') {
-        $whereSql = "WHERE (m.MemberID LIKE :search OR m.FirstName LIKE :search OR m.LastName LIKE :search OR CONCAT(m.FirstName, ' ', m.LastName) LIKE :search OR m.PrimaryNumber LIKE :search OR m.Email LIKE :search OR m.NationalID LIKE :search OR m.Status LIKE :search)";
+        $whereSql .= " AND (m.MemberID LIKE :search OR m.FirstName LIKE :search OR m.LastName LIKE :search OR CONCAT(m.FirstName, ' ', m.LastName) LIKE :search OR m.PrimaryNumber LIKE :search OR m.Email LIKE :search OR m.NationalID LIKE :search)";
         $params[':search'] = '%' . $search . '%';
     }
 
@@ -202,13 +223,14 @@ function loadMembers(PDO $pdo, string $search, int $limit, int $page): array
     return [$members, $memberTransactions, $totalMembers, $totalPages, $page];
 }
 
-function loadMembersForPdf(PDO $pdo, string $search): array
+function loadMembersForPdf(PDO $pdo, string $search, string $status): array
 {
-    $whereSql = '';
-    $params = [];
+    if ($status === 'Deleted') return [];
+    $whereSql = 'WHERE m.Status = :status';
+    $params = [':status' => $status];
 
     if ($search !== '') {
-        $whereSql = "WHERE (m.MemberID LIKE :search OR m.FirstName LIKE :search OR m.LastName LIKE :search OR CONCAT(m.FirstName, ' ', m.LastName) LIKE :search OR m.PrimaryNumber LIKE :search OR m.Email LIKE :search OR m.NationalID LIKE :search OR m.Status LIKE :search)";
+        $whereSql .= " AND (m.MemberID LIKE :search OR m.FirstName LIKE :search OR m.LastName LIKE :search OR CONCAT(m.FirstName, ' ', m.LastName) LIKE :search OR m.PrimaryNumber LIKE :search OR m.Email LIKE :search OR m.NationalID LIKE :search)";
         $params[':search'] = '%' . $search . '%';
     }
 
@@ -255,7 +277,7 @@ function renderMemberRows(array $members): string
         <td class="actions-cell text-end">
           <a href="edit_member.php?id=<?= urlencode($member['MemberID']) ?>">Edit</a>
           <?php if (in_array($member['Status'], ['Pending', 'Suspended'], true) && Auth::adminRole() === 'admin'): ?>
-            <form method="post" action="delete_member.php" class="d-inline" onsubmit="return confirm('Archive and delete this <?= e($member['Status']) ?> member?');"><input type="hidden" name="member_id" value="<?= e($member['MemberID']) ?>"><button class="btn btn-link btn-sm text-danger p-0 ms-2" type="submit">Delete</button></form>
+            <form method="post" action="delete_member.php" class="d-inline" onsubmit="return confirm('Confirm deletion: this will move this <?= e($member['Status']) ?> member to Deleted Members. Continue?');"><input type="hidden" name="member_id" value="<?= e($member['MemberID']) ?>"><button class="btn btn-link btn-sm text-danger p-0 ms-2" type="submit">Delete</button></form>
           <?php endif; ?>
           <a href="#" data-bs-toggle="modal" data-bs-target="#memberTransactions<?= e($member['MemberID']) ?>">Transactions</a>
         </td>
@@ -406,13 +428,23 @@ function renderPagination(int $currentPage, int $totalPages): string
       <div class="col-md-4 col-xl">
         <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Total Deposits</div><div class="h3 fw-bold mb-0"><?= number_format((float)$depositStats['TotalDeposits'], 2) ?></div></div></div>
       </div>
+      <div class="col-md-4 col-xl">
+        <div class="card metric h-100"><div class="card-body"><div class="text-muted small">Penalty Collected</div><div class="h3 fw-bold mb-0">KES <?= number_format((float)$penaltyStats['Collected'], 2) ?></div><div class="small text-muted">Assessed: KES <?= number_format((float)$penaltyStats['Assessed'], 2) ?></div></div></div>
+      </div>
     </div>
+
+    <nav class="nav nav-pills mb-3" aria-label="Member status">
+      <?php foreach (['Active' => 'Active', 'Pending' => 'Pending', 'Suspended' => 'Suspended', 'Deleted' => 'Deleted'] as $statusKey => $statusLabel): ?>
+        <a class="nav-link <?= $statusFilter === $statusKey ? 'active' : '' ?>" href="members.php?<?= e(http_build_query(['status' => $statusKey])) ?>"><?= e($statusLabel) ?></a>
+      <?php endforeach; ?>
+    </nav>
 
     <section class="card panel mb-4">
       <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-          <h2 class="h5 fw-bold mb-0">Registered Members</h2>
+          <h2 class="h5 fw-bold mb-0"><?= e($statusFilter) ?> Members</h2>
           <form method="get" id="memberSearchForm" class="row g-2 search-row flex-grow-1 justify-content-end">
+            <input type="hidden" name="status" value="<?= e($statusFilter) ?>">
             <div class="col-lg-5">
               <input class="form-control" id="memberSearch" name="search" value="<?= e($search) ?>" placeholder="Search by name, MemberID, phone, email, status or NationalID" autocomplete="off">
             </div>
@@ -434,19 +466,41 @@ function renderPagination(int $currentPage, int $totalPages): string
             </div>
           </form>
         </div>
+        <?php if ($statusFilter !== 'Deleted'): ?>
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
           <div class="text-muted small" id="memberResultSummary"><?= e(memberResultSummary(count($members), $totalMembers, $currentPage, $rowLimit)) ?></div>
           <div id="memberPagination">
             <?= renderPagination($currentPage, $totalPages) ?>
           </div>
         </div>
+        <?php endif; ?>
         <div class="table-responsive">
+          <?php if ($statusFilter === 'Deleted'): ?>
+          <table class="table align-middle">
+            <thead><tr><th>MemberID</th><th>Name</th><th>National ID</th><th>Phone</th><th>Previous Status</th><th>Deleted At</th><th>Penalty on Restore (KES)</th><th>Reason</th><th>Action</th></tr></thead>
+            <tbody>
+              <?php foreach ($deletedMembers as $deleted): ?>
+                <tr>
+                  <td><?= e($deleted['MemberID']) ?></td><td><?= e($deleted['FirstName'] . ' ' . $deleted['LastName']) ?></td>
+                  <td><?= e($deleted['NationalID']) ?></td><td><?= e($deleted['PrimaryNumber']) ?></td>
+                  <td><?= e($deleted['Status']) ?></td><td><?= e($deleted['DeletedAt']) ?></td>
+                  <?php $restoreFormId = 'restore-' . (int)$deleted['DeletedMemberID']; ?>
+                  <td><input class="form-control form-control-sm" form="<?= e($restoreFormId) ?>" type="number" name="penalty_amount" min="0" step="0.01" value="0.00" required aria-label="Penalty amount"></td>
+                  <td><input class="form-control form-control-sm" form="<?= e($restoreFormId) ?>" type="text" name="penalty_reason" maxlength="255" placeholder="Optional reason"></td>
+                  <td><form id="<?= e($restoreFormId) ?>" method="post" action="restore_member.php" onsubmit="return confirm('Restore this member as Active and record the penalty?');"><input type="hidden" name="deleted_member_id" value="<?= (int)$deleted['DeletedMemberID'] ?>"><button class="btn btn-sm btn-success" type="submit">Confirm restore</button></form></td>
+                </tr>
+              <?php endforeach; ?>
+              <?php if (!$deletedMembers): ?><tr><td colspan="9" class="text-muted">No deleted members found.</td></tr><?php endif; ?>
+            </tbody>
+          </table>
+          <?php else: ?>
           <table class="table align-middle">
             <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end wallet-akiba">Current Akiba</th><th class="text-end wallet-ushirika">Ushirika Amount</th><th class="text-end">Actions</th></tr></thead>
             <tbody id="membersTableBody">
               <?= renderMemberRows($members) ?>
             </tbody>
           </table>
+          <?php endif; ?>
         </div>
       </div>
     </section>
@@ -493,6 +547,7 @@ function renderPagination(int $currentPage, int $totalPages): string
     let activeController = null;
     let currentPage = <?= (int)$currentPage ?>;
 
+    if (memberSearchForm && membersTableBody) {
     function updateMembers(page = currentPage) {
       if (activeController) {
         activeController.abort();
@@ -570,6 +625,7 @@ function renderPagination(int $currentPage, int $totalPages): string
       event.preventDefault();
       updateMembers(link.dataset.page);
     });
+    }
   </script>
 </body>
 </html>

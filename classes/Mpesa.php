@@ -272,6 +272,14 @@ class Mpesa
                 }
             }
 
+            if ($remaining > 0 && $memberId !== null) {
+                $penaltyAmount = self::applyMemberPenalties($pdo, $memberId, $data, $member, $remaining);
+                if ($penaltyAmount > 0) {
+                    $segments[] = ['type' => 'penalty', 'amount' => $penaltyAmount];
+                    $remaining = round($remaining - $penaltyAmount, 2);
+                }
+            }
+
             if ($remaining > 0) {
                 self::insertLedgerTransaction($pdo, $data, $member, $remaining, 'contribution', 'monthly_contribution', 'Contribution payment from M-Pesa');
                 $segments[] = ['type' => 'contribution', 'amount' => $remaining];
@@ -414,6 +422,29 @@ class Mpesa
                 ':created_at' => $data['TranTime'] ?: date('Y-m-d H:i:s'),
             ]);
         }
+    }
+
+    private static function applyMemberPenalties(PDO $pdo, string $memberId, array $data, array $member, float $available): float
+    {
+        $stmt = $pdo->prepare('SELECT PenaltyID, Amount, PaidAmount FROM member_penalties WHERE MemberID = ? AND PaidAmount < Amount ORDER BY PenaltyID ASC FOR UPDATE');
+        $stmt->execute([$memberId]);
+        $penalties = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $remaining = round($available, 2);
+        $paidTotal = 0.00;
+        $update = $pdo->prepare('UPDATE member_penalties SET PaidAmount = PaidAmount + ? WHERE PenaltyID = ?');
+        foreach ($penalties as $penalty) {
+            if ($remaining <= 0) break;
+            $due = max(0.00, round((float)$penalty['Amount'] - (float)$penalty['PaidAmount'], 2));
+            $payment = min($remaining, $due);
+            if ($payment <= 0) continue;
+            $update->execute([$payment, $penalty['PenaltyID']]);
+            $paidTotal = round($paidTotal + $payment, 2);
+            $remaining = round($remaining - $payment, 2);
+        }
+        if ($paidTotal > 0) {
+            self::insertLedgerTransaction($pdo, $data, $member, $paidTotal, 'penalty_payment', 'penalty_payment', 'M-Pesa payment applied to member penalty');
+        }
+        return $paidTotal;
     }
 
     public static function ensureSaccoWalletsTable(PDO $pdo): void

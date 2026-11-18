@@ -21,6 +21,24 @@ CREATE TABLE IF NOT EXISTS `members` (
   KEY `idx_members_phone` (`PrimaryNumber`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `deleted_members` (
+  `DeletedMemberID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `MemberID` VARCHAR(40) NOT NULL,
+  `NationalID` VARCHAR(30) NOT NULL,
+  `FirstName` VARCHAR(100) NOT NULL,
+  `LastName` VARCHAR(100) NOT NULL,
+  `PrimaryNumber` VARCHAR(20) NOT NULL,
+  `Email` VARCHAR(150) NULL,
+  `Status` VARCHAR(30) NOT NULL,
+  `CreatedAt` TIMESTAMP NULL,
+  `MemberData` JSON NOT NULL,
+  `DeletedBy` INT UNSIGNED NULL,
+  `DeletedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`DeletedMemberID`),
+  KEY `idx_deleted_member_id` (`MemberID`),
+  KEY `idx_deleted_national_id` (`NationalID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `admin_users` (
   `AdminUserID` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `FullName` VARCHAR(150) NOT NULL,
@@ -54,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `member_transactions` (
   `LastName` VARCHAR(100) NOT NULL,
   `MSISDN` VARCHAR(20) NOT NULL,
   `Amount` DECIMAL(12,2) NOT NULL,
-  `TransactionType` ENUM('deposit','contribution','withdrawal','loan_repayment') NOT NULL,
+  `TransactionType` ENUM('deposit','contribution','withdrawal','loan_repayment','penalty_payment') NOT NULL,
   `TransactionCategory` VARCHAR(60) NOT NULL DEFAULT 'general',
   `Reference` VARCHAR(120) NULL,
   `Description` VARCHAR(255) NULL,
@@ -72,6 +90,20 @@ CREATE TABLE IF NOT EXISTS `member_transactions` (
     FOREIGN KEY (`MemberID`) REFERENCES `members` (`MemberID`)
     ON UPDATE CASCADE
     ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `member_penalties` (
+  `PenaltyID` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `MemberID` VARCHAR(40) NOT NULL,
+  `Amount` DECIMAL(12,2) NOT NULL,
+  `PaidAmount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `Reason` VARCHAR(255) NULL,
+  `RestoredBy` INT UNSIGNED NULL,
+  `CreatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `UpdatedAt` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`PenaltyID`),
+  KEY `idx_member_penalties_member` (`MemberID`),
+  KEY `idx_member_penalties_status` (`MemberID`, `PaidAmount`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `deposits` (

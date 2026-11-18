@@ -189,7 +189,7 @@ class MemberService
 
         self::linkUnmatchedContributions($memberId, $nationalId, $phone);
 
-        if ($canChangePassword && $password !== '') {
+        if ($canChangePassword && $password !== '' && $status !== 'Suspended') {
             self::sendPasswordChangedSms($phone, $firstName, $lastName, $memberId, $password);
         }
     }
@@ -240,6 +240,42 @@ class MemberService
             $pdo->commit();
         } catch (Throwable $error) {
             $pdo->rollBack();
+            throw $error;
+        }
+    }
+
+    public static function restoreMember(int $deletedMemberId, int $adminId, float $penaltyAmount, string $reason = ''): void
+    {
+        if ($penaltyAmount < 0 || !is_finite($penaltyAmount)) {
+            throw new InvalidArgumentException('Penalty amount must be zero or more.');
+        }
+        $pdo = Database::connection();
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare('SELECT * FROM deleted_members WHERE DeletedMemberID = ? FOR UPDATE');
+            $stmt->execute([$deletedMemberId]);
+            $archived = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$archived) throw new RuntimeException('Deleted member record not found.');
+
+            $memberData = json_decode((string)$archived['MemberData'], true, 512, JSON_THROW_ON_ERROR);
+            if (!is_array($memberData) || empty($memberData['MemberID'])) {
+                throw new RuntimeException('Archived member data is incomplete and cannot be restored.');
+            }
+            if (isset($memberData['Status'])) $memberData['Status'] = 'Active';
+            $columns = array_keys($memberData);
+            $quotedColumns = implode(', ', array_map(static fn($column) => '`' . str_replace('`', '``', $column) . '`', $columns));
+            $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+            $restore = $pdo->prepare("INSERT INTO members ({$quotedColumns}) VALUES ({$placeholders})");
+            $restore->execute(array_values($memberData));
+
+            if ($penaltyAmount > 0) {
+                $penalty = $pdo->prepare('INSERT INTO member_penalties (MemberID, Amount, Reason, RestoredBy) VALUES (?, ?, ?, ?)');
+                $penalty->execute([$memberData['MemberID'], round($penaltyAmount, 2), trim($reason) ?: 'Penalty on member restoration', $adminId]);
+            }
+            $pdo->prepare('DELETE FROM deleted_members WHERE DeletedMemberID = ?')->execute([$deletedMemberId]);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             throw $error;
         }
     }

@@ -709,7 +709,7 @@ class LoanService
                 ':ai_after' => $accruedInterestAfter,
             ]);
 
-            $memberStmt = $pdo->prepare('SELECT MemberID, FirstName, LastName, PrimaryNumber FROM members WHERE MemberID = :member_id LIMIT 1');
+            $memberStmt = $pdo->prepare('SELECT MemberID, FirstName, LastName, PrimaryNumber, Status FROM members WHERE MemberID = :member_id LIMIT 1');
             $memberStmt->execute([':member_id' => $loan['memberID']]);
             $member = $memberStmt->fetch();
             if (!$member) {
@@ -738,7 +738,7 @@ class LoanService
             }
 
             // Send repayment confirmation SMS
-            if (!$wasInTx && $member && !empty($member['PrimaryNumber'])) {
+            if (!$wasInTx && $member && !empty($member['PrimaryNumber']) && ($member['Status'] ?? '') !== 'Suspended') {
                 $totalOwedAfter = round($principalAfter + $newBilled + $accruedInterestAfter + $newPenalty, 2);
                 $paymentDate = date('d M Y', strtotime($transactionDate));
                 $portalUrl = 'https://mashirikianosacco.co.ke/member/dashboard.php?tab=active';
