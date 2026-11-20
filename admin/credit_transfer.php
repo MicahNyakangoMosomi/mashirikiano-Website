@@ -339,7 +339,7 @@ $activeMembers = $membersStmt->fetchAll();
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-2" rel="stylesheet">
+  <link href="admin.css?v=20261120-3" rel="stylesheet">
   <style>
     body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; }
     .card-metric { border: none; border-radius: 10px; transition: transform 0.2s; }
@@ -385,7 +385,7 @@ $activeMembers = $membersStmt->fetchAll();
 
       <div class="card-body p-0">
         <div class="table-responsive">
-          <table class="table table-hover table-custom align-middle mb-0">
+          <table class="table align-middle mb-0 admin-report-table">
             <thead>
               <tr>
                 <th class="ps-3">Member ID</th>

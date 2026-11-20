@@ -158,7 +158,7 @@ if ($viewLoanId > 0) {
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-2" rel="stylesheet">
+  <link href="admin.css?v=20261120-3" rel="stylesheet">
   <style>
     body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; }
     .card-metric { border: none; border-radius: 10px; transition: transform 0.2s; }
@@ -267,7 +267,7 @@ if ($viewLoanId > 0) {
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover table-custom align-middle mb-0">
+            <table class="table align-middle mb-0 admin-report-table">
               <thead>
                 <tr>
                   <th class="ps-3">Member</th>
@@ -363,7 +363,7 @@ if ($viewLoanId > 0) {
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover table-custom align-middle mb-0">
+            <table class="table align-middle mb-0 admin-report-table">
               <thead>
                 <tr>
                   <th class="ps-3">App ID</th>
@@ -496,8 +496,8 @@ if ($viewLoanId > 0) {
           </div>
           <div class="modal-body p-4">
             <div class="table-responsive">
-              <table class="table table-sm table-striped align-middle">
-                <thead class="table-dark">
+              <table class="table table-sm align-middle admin-report-table">
+                <thead>
                   <tr>
                     <th>Tx ID</th>
                     <th>Date</th>

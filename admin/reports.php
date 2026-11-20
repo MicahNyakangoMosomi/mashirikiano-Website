@@ -262,7 +262,7 @@ function renderPagination(int $currentPage, int $totalPages): string
   <title>Reports | Mashirikiano SACCO Admin</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-2" rel="stylesheet">
+  <link href="admin.css?v=20261120-3" rel="stylesheet">
   <style>
     @media (max-width: 767px) { .table { min-width: 1040px; } }
   </style>
@@ -330,7 +330,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         </div>
 
         <div class="table-responsive">
-          <table class="table align-middle">
+          <table class="table align-middle admin-report-table">
             <thead><tr><th>TranID</th><th>Category</th><th>Account Number</th><th>Name</th><th>Phone</th><th>MemberID</th><th>Date</th><th>Description</th><th class="text-end">Amount</th></tr></thead>
             <tbody id="reportTableBody">
               <?= renderTransactionRows($transactions) ?>

@@ -318,7 +318,7 @@ function renderMemberModals(array $members, array $memberTransactions): string
                 </div>
               </div>
               <div class="table-responsive">
-                <table class="table align-middle">
+                <table class="table align-middle admin-report-table">
                   <thead><tr><th>Reference</th><th>Date &amp; Time</th><th>Type</th><th>Description</th><th>Phone</th><th class="text-end">Amount</th></tr></thead>
                   <tbody>
                     <?php foreach (($memberTransactions[$member['MemberID']] ?? []) as $transaction): ?>
@@ -399,7 +399,7 @@ function renderPagination(int $currentPage, int $totalPages): string
   <title>Admin Dashboard | Mashirikiano SACCO</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-2" rel="stylesheet">
+  <link href="admin.css?v=20261120-3" rel="stylesheet">
   <style>
     .member-id { font-weight: 700; color: #0b3b66; }
     .search-row .form-control, .search-row .form-select { min-height: 44px; }
@@ -475,7 +475,7 @@ function renderPagination(int $currentPage, int $totalPages): string
         <?php endif; ?>
         <div class="table-responsive">
           <?php if ($statusFilter === 'Deleted'): ?>
-          <table class="table align-middle">
+          <table class="table align-middle admin-report-table">
             <thead><tr><th>MemberID</th><th>Name</th><th>National ID</th><th>Phone</th><th>Previous Status</th><th>Deleted At</th><th>Penalty on Restore (KES)</th><th>Reason</th><th>Action</th></tr></thead>
             <tbody>
               <?php foreach ($deletedMembers as $deleted): ?>
@@ -493,7 +493,7 @@ function renderPagination(int $currentPage, int $totalPages): string
             </tbody>
           </table>
           <?php else: ?>
-          <table class="table align-middle">
+          <table class="table align-middle admin-report-table">
             <thead><tr><th>MemberID</th><th>Full Name</th><th>Phone</th><th>Email</th><th>NationalID</th><th>Status</th><th>Deposit Balance</th><th>CreatedAt</th><th class="text-end wallet-akiba">Current Akiba</th><th class="text-end wallet-ushirika">Ushirika Amount</th><th class="text-end">Actions</th></tr></thead>
             <tbody id="membersTableBody">
               <?= renderMemberRows($members) ?>
@@ -508,7 +508,7 @@ function renderPagination(int $currentPage, int $totalPages): string
       <div class="card-body">
         <h2 class="h5 fw-bold mb-3">Unmatched Contribution Summaries</h2>
         <div class="table-responsive">
-          <table class="table align-middle">
+          <table class="table align-middle admin-report-table">
             <thead><tr><th>Account Number</th><th>Name</th><th>Phone</th><th>Records</th><th class="text-end">Total</th></tr></thead>
             <tbody>
               <?php foreach ($pendingContributions as $row): ?>
