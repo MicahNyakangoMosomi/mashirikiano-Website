@@ -216,7 +216,7 @@ $initialTab  = ($_GET['tab'] ?? '') === 'single' ? 'single' : 'bulk';
   <title>Send Messages | Mashirikiano SACCO Admin</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-5" rel="stylesheet">
+  <link href="admin.css?v=20261120-6" rel="stylesheet">
   <style>
     .msg-tabs { display:flex; gap:10px; margin-bottom:28px; }
     .msg-tab-btn {

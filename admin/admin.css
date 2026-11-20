@@ -409,6 +409,12 @@ body.admin-sidebar-collapsed .admin-nav-arrow {
   border-bottom: 1px solid #fff;
 }
 
+.admin-shell .panel:has(.table),
+.admin-shell .card:has(.table) {
+  background-color: #f3f6fa;
+  box-shadow: none;
+}
+
 @media (max-width: 991px) {
   body {
     padding-left: 0;

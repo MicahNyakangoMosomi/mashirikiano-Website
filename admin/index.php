@@ -295,7 +295,7 @@ try {
   <title>Admin Dashboard | Mashirikiano SACCO</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-5" rel="stylesheet">
+  <link href="admin.css?v=20261120-6" rel="stylesheet">
   <style>
     .bi-hero {
       background: #28309a;
