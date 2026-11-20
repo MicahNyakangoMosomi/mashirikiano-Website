@@ -254,8 +254,10 @@ function dashboardUrl(array $params): string
     body { background: #eef4f0; color: #1d2b26; }
     .member-shell { max-width: 1200px; }
     .portal-header { background: #087a43; color: #fff; padding: 14px 0 10px; }
-    .member-brand { display: flex; align-items: center; gap: 12px; }
-    .member-brand img { background: #fff; border-radius: 50%; padding: 4px; }
+    .portal-header .member-shell { row-gap: 10px !important; }
+    .member-brand { display: flex; align-items: center; gap: 12px; flex: 1 1 220px; min-width: 0; color:#fff !important; }
+    .member-brand > div { min-width:0; color:#fff !important; }
+    .member-brand img { width:clamp(40px, 5vw, 52px); height:auto; flex:0 0 auto; background: #fff; border-radius: 50%; padding: 4px; }
     .member-top-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; background: #fff; border-bottom: 1px solid #dce8e1; box-shadow: 0 8px 24px rgba(28, 77, 51, .08); position: sticky; top: 0; z-index: 1030; }
     .member-top-nav a { color: #5e7068; font-weight: 700; text-decoration: none; padding: 14px 4px 12px; border-bottom: 3px solid transparent; font-size: 0.95rem; }
     .member-top-nav a:hover, .member-top-nav a.active { color: #087a43; border-bottom-color: #087a43; }
@@ -423,12 +425,15 @@ function dashboardUrl(array $params): string
     @keyframes spin { 100% { transform: rotate(360deg); } }
     .spin-anim { animation: spin 1s linear infinite; display: inline-block; }
 
-    .account-menu { position: relative; }
-    .account-menu summary { list-style: none; cursor: pointer; display:flex; align-items:center; gap:12px; border:1px solid rgba(255,255,255,.8); border-radius:4px; padding:5px 10px; min-width:220px; }
+    .account-menu { position: relative; flex:0 1 auto; min-width:0; }
+    .account-menu summary { list-style: none; cursor: pointer; display:flex; align-items:center; gap:10px; border:1px solid rgba(255,255,255,.8); border-radius:4px; padding:5px 10px; width:clamp(190px, 25vw, 270px); max-width:100%; min-width:0; color:#fff !important; }
     .account-menu summary::-webkit-details-marker { display:none; }
-    .account-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; background:#fff; }
+    .account-menu summary span, .account-menu summary i { color:#fff !important; }
+    .account-menu summary span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:clamp(.78rem, 1.1vw, .95rem); }
+    .account-menu summary i { flex:0 0 auto; }
+    .account-avatar { width:clamp(34px, 4vw, 42px); height:clamp(34px, 4vw, 42px); flex:0 0 auto; border-radius:50%; object-fit:cover; background:#fff; }
     .account-menu[open] .account-dropdown { display:block; }
-    .account-dropdown { display:none; position:absolute; right:0; top:calc(100% + 8px); z-index:1100; width:250px; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.25); border:1px solid #d5d5d5; }
+    .account-dropdown { display:none; position:absolute; right:0; top:calc(100% + 8px); z-index:1100; width:min(250px, calc(100vw - 24px)); background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.25); border:1px solid #d5d5d5; }
     .account-dropdown a { display:block; padding:10px 12px; color:#555; text-decoration:none; border-bottom:1px solid #ddd; }
     .account-dropdown a:last-child { border-bottom:0; }
     .account-dropdown a:hover { background:#f2f6f3; color:#087a43; }
@@ -469,8 +474,22 @@ function dashboardUrl(array $params): string
     .status-pill.CLOSED { background: #e2e3e5; color: #383d41; }
 
     @media (max-width: 767px) {
+      .portal-header { padding:10px 0; }
+      .portal-header .member-shell { gap:8px !important; }
+      .member-brand { flex:1 1 145px; gap:8px; }
+      .member-brand img { width:42px; }
+      .member-brand .fw-bold { font-size:.88rem; }
+      .member-brand .small { font-size:.72rem; }
+      .account-menu { flex:0 1 auto; }
+      .account-menu summary { width:min(210px, 48vw); gap:7px; padding:4px 7px; }
+      .account-avatar { width:34px; height:34px; }
       .member-top-nav { gap: 10px; overflow-x: auto; justify-content: flex-start; padding: 0 10px; flex-wrap: nowrap; }
       .member-top-nav a { white-space: nowrap; font-size: 0.88rem; }
+    }
+    @media (max-width:380px) {
+      .member-brand { flex-basis:130px; }
+      .member-brand .small { display:none; }
+      .account-menu summary { width: min(175px, 47vw); }
     }
   </style>
 </head>
