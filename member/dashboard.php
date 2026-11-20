@@ -449,8 +449,9 @@ function dashboardUrl(array $params): string
     .profile-accordion { border:1px solid #ccc; margin-bottom:14px; background:#fff; }
     .profile-accordion > summary { cursor:pointer; list-style:none; background:#aaa; color:#fff; font-size:1.25rem; padding:11px; display:flex; justify-content:space-between; align-items:center; }
     .profile-accordion > summary::-webkit-details-marker { display:none; }
-    .profile-accordion > summary::after { content:"âˆ’"; width:28px; height:28px; border-radius:50%; background:#fff; color:#9aa1a8; display:grid; place-items:center; line-height:1; }
-    .profile-accordion:not([open]) > summary::after { content:"+"; }
+    .profile-accordion > summary::after { content:"-"; width:30px; height:30px; flex:0 0 30px; border:1px solid #fff; border-radius:50%; background:#fff; color:#344054; display:grid; place-items:center; font-size:1.35rem; font-weight:700; line-height:1; }
+    .profile-accordion:not([open]) > summary::after { content:"+"; font-size:1.15rem; }
+    .profile-accordion > summary:focus-visible { outline:3px solid #164b87; outline-offset:2px; }
     .profile-accordion-body { padding:22px 10px 14px; }
     .profile-section-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px 38px; }
     .profile-section-item { display:grid; grid-template-columns:minmax(150px, 34%) 1fr; gap:10px; }
