@@ -262,7 +262,7 @@ function dashboardUrl(array $params): string
     .member-hero { background: linear-gradient(135deg, #087a43, #0a5534); color: #fff; border-radius: 8px; padding: 22px; box-shadow: 0 18px 40px rgba(8, 122, 67, .18); }
     .member-profile-summary { display: flex; align-items: center; gap: 18px; }
     .member-profile-photo { width: 86px; height: 86px; border-radius: 50%; object-fit: cover; border: 4px solid rgba(255,255,255,.92); background: #fff; flex: 0 0 86px; }
-    .member-profile-name { font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 800; line-height: 1.12; margin: 0 0 6px; }
+    .member-profile-name { color: #fff !important; font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 800; line-height: 1.12; margin: 0 0 6px; }
     .member-profile-id { color: rgba(255,255,255,.82); font-size: 1.08rem; font-weight: 700; margin: 0; }
     .profile-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
     .profile-detail { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 12px; min-width: 0; }
@@ -433,6 +433,24 @@ function dashboardUrl(array $params): string
     .account-dropdown a:last-child { border-bottom:0; }
     .account-dropdown a:hover { background:#f2f6f3; color:#087a43; }
     .readonly-profile .form-control { background:#f8faf9; }
+    .profile-breadcrumb { border-bottom:1px solid #d3d3d3; padding:0 0 10px; margin-bottom:28px; color:#667085; }
+    .profile-breadcrumb a { color:#667085; text-decoration:none; }
+    .profile-title { color:#102b4e; font-size:1.7rem; font-weight:700; margin:0 0 26px; }
+    .profile-title::after { content:""; display:block; width:100px; border-bottom:2px solid #164b87; margin-top:10px; }
+    .profile-summary-grid { display:grid; grid-template-columns:1fr 1fr; column-gap:40px; row-gap:15px; margin-bottom:22px; }
+    .profile-summary-item { display:grid; grid-template-columns:minmax(130px, 34%) 1fr; gap:12px; }
+    .profile-label { color:#164b87; }
+    .profile-value { color:#111; overflow-wrap:anywhere; }
+    .profile-accordion { border:1px solid #ccc; margin-bottom:14px; background:#fff; }
+    .profile-accordion > summary { cursor:pointer; list-style:none; background:#aaa; color:#fff; font-size:1.25rem; padding:11px; display:flex; justify-content:space-between; align-items:center; }
+    .profile-accordion > summary::-webkit-details-marker { display:none; }
+    .profile-accordion > summary::after { content:"−"; width:28px; height:28px; border-radius:50%; background:#fff; color:#9aa1a8; display:grid; place-items:center; line-height:1; }
+    .profile-accordion:not([open]) > summary::after { content:"+"; }
+    .profile-accordion-body { padding:22px 10px 14px; }
+    .profile-section-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px 38px; }
+    .profile-section-item { display:grid; grid-template-columns:minmax(150px, 34%) 1fr; gap:10px; }
+    .profile-subhead { color:#102b4e; font-size:1.2rem; font-weight:700; margin:0 0 18px; }
+    @media (max-width:767px) { .profile-summary-grid,.profile-section-grid { grid-template-columns:1fr; } .profile-summary-item,.profile-section-item { grid-template-columns:38% 1fr; } }
     .status-pill {
       font-size: 0.76rem;
       font-weight: 700;
@@ -1180,42 +1198,40 @@ function dashboardUrl(array $params): string
           $kinStmt = $pdo->prepare('SELECT FullName, NationalID, DateOfBirth, Relationship, Phone, Allocation FROM next_of_kin WHERE MemberID = :member_id ORDER BY NextOfKinID');
           $kinStmt->execute([':member_id' => $member['MemberID']]);
           $memberKin = $kinStmt->fetchAll();
-          $profileFields = [
-            'MemberID' => 'Member ID', 'FirstName' => 'First name', 'LastName' => 'Last name',
-            'NationalID' => 'National ID', 'PrimaryNumber' => 'Phone number', 'Email' => 'Email',
-            'DateOfBirth' => 'Date of birth', 'Gender' => 'Gender', 'Nationality' => 'Nationality',
-            'MaritalStatus' => 'Marital status', 'PostalAddress' => 'Postal address', 'PhysicalAddress' => 'Physical address',
-            'Profession' => 'Profession', 'Industry' => 'Industry', 'EmployerName' => 'Employer',
-            'StaffPayrollNumber' => 'Payroll number', 'EmploymentPosition' => 'Position',
-            'GrossMonthlyIncome' => 'Gross monthly income', 'BusinessDetails' => 'Business details',
-            'JoiningDate' => 'Joining date', 'CreatedAt' => 'Account created', 'Status' => 'Account status',
-          ];
+          $personalFields = ['DateOfBirth'=>'Birth Date','Gender'=>'Gender','Nationality'=>'Nationality','MaritalStatus'=>'Marital Status','Status'=>'Account Status','JoiningDate'=>'Joining Date','CreatedAt'=>'Account Created'];
+          $addressFields = ['PostalAddress'=>'Postal Address','PhysicalAddress'=>'Physical Address'];
+          $employmentFields = ['Profession'=>'Profession','Industry'=>'Industry','EmployerName'=>'Employer','StaffPayrollNumber'=>'Payroll Number','EmploymentPosition'=>'Position','GrossMonthlyIncome'=>'Gross Monthly Income','BusinessDetails'=>'Business Details'];
           $profileDocuments = [
             'NationalIDDocument' => ['National ID document', 'id'], 'KRADocument' => ['KRA certificate', 'kra'],
             'PassportPhoto' => ['Passport photo', 'photo'], 'MembershipForm' => ['Membership form', 'form'],
           ];
         ?>
-        <section class="card metric mb-4">
-          <div class="card-body">
-            <h1 class="h3 fw-bold mb-1">Member Profile</h1>
-            <p class="text-muted">Your membership information and uploaded files. All details are view only.</p>
-            <div class="row g-3 readonly-profile">
-              <?php foreach ($profileFields as $field => $label): ?>
-                <div class="col-md-6"><label class="form-label fw-semibold"><?= e($label) ?></label><div class="form-control" aria-readonly="true"><?= e(($member[$field] ?? '') !== '' ? $member[$field] : 'Not provided') ?></div></div>
-              <?php endforeach; ?>
-            </div>
-          </div>
-        </section>
-        <section class="card metric mb-4"><div class="card-body">
-          <h2 class="h5 fw-bold">Next of Kin</h2>
-          <?php if (!$memberKin): ?><p class="text-muted mb-0">No next of kin information provided.</p>
-          <?php else: ?><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>National ID</th><th>Date of birth</th><th>Relationship</th><th>Phone</th><th>Allocation</th></tr></thead><tbody>
-            <?php foreach ($memberKin as $kin): ?><tr><?php foreach (['FullName','NationalID','DateOfBirth','Relationship','Phone'] as $field): ?><td><?= e($kin[$field] ?: '—') ?></td><?php endforeach; ?><td><?= e($kin['Allocation'] !== null ? $kin['Allocation'] . '%' : '—') ?></td></tr><?php endforeach; ?>
-          </tbody></table></div><?php endif; ?>
-        </div></section>
-        <section class="card metric"><div class="card-body"><h2 class="h5 fw-bold">Uploaded Files</h2><div class="list-group list-group-flush">
-          <?php foreach ($profileDocuments as $field => [$label, $type]): ?><div class="list-group-item d-flex justify-content-between align-items-center gap-3"><span><?= e($label) ?></span><?php if (!empty($member[$field])): ?><a class="btn btn-sm btn-outline-success" href="document.php?type=<?= e($type) ?>" target="_blank" rel="noopener">View file</a><?php else: ?><span class="text-muted">Not uploaded</span><?php endif; ?></div><?php endforeach; ?>
-        </div></div></section>
+        <div class="profile-breadcrumb"><a href="?tab=dashboard">Dashboard</a><span class="mx-3">/</span><span style="color:#164b87">Profile</span></div>
+        <h1 class="profile-title">Member Master Information</h1>
+        <div class="profile-summary-grid">
+          <?php foreach (['FirstName'=>'First Name','NationalID'=>'National ID','LastName'=>'Last Name','MemberID'=>'Member ID','PrimaryNumber'=>'Phone Number','Email'=>'Email'] as $field=>$label): ?>
+            <div class="profile-summary-item"><span class="profile-label"><?= e($label) ?></span><span class="profile-value"><?= e(($member[$field] ?? '') !== '' ? $member[$field] : 'Not provided') ?></span></div>
+          <?php endforeach; ?>
+        </div>
+        <details class="profile-accordion" open><summary>General Information</summary><div class="profile-accordion-body"><div class="profile-section-grid">
+          <?php foreach ($personalFields as $field=>$label): ?><div class="profile-section-item"><span class="profile-label"><?= e($label) ?></span><span class="profile-value"><?= e(($member[$field] ?? '') !== '' ? $member[$field] : 'Not provided') ?></span></div><?php endforeach; ?>
+        </div></div></details>
+        <details class="profile-accordion" open><summary>Address</summary><div class="profile-accordion-body"><div class="profile-section-grid">
+          <?php foreach ($addressFields as $field=>$label): ?><div class="profile-section-item"><span class="profile-label"><?= e($label) ?></span><span class="profile-value"><?= e(($member[$field] ?? '') !== '' ? $member[$field] : 'Not provided') ?></span></div><?php endforeach; ?>
+        </div></div></details>
+        <details class="profile-accordion" open><summary>Employment Information</summary><div class="profile-accordion-body"><div class="profile-section-grid">
+          <?php foreach ($employmentFields as $field=>$label): ?><div class="profile-section-item"><span class="profile-label"><?= e($label) ?></span><span class="profile-value"><?= e(($member[$field] ?? '') !== '' ? $member[$field] : 'Not provided') ?></span></div><?php endforeach; ?>
+        </div></div></details>
+        <details class="profile-accordion" open><summary>Next of Kin</summary><div class="profile-accordion-body">
+          <?php if (!$memberKin): ?><p class="text-muted mb-0">No next of kin information provided.</p><?php else: ?>
+            <?php foreach ($memberKin as $index=>$kin): ?><h3 class="profile-subhead">Beneficiary <?= $index + 1 ?></h3><div class="profile-section-grid mb-4">
+              <?php foreach (['FullName'=>'Full Name','NationalID'=>'National ID','DateOfBirth'=>'Date of Birth','Relationship'=>'Relationship','Phone'=>'Phone','Allocation'=>'Allocation'] as $field=>$label): ?><div class="profile-section-item"><span class="profile-label"><?= e($label) ?></span><span class="profile-value"><?= e(($kin[$field] ?? '') !== '' ? ($field === 'Allocation' ? $kin[$field] . '%' : $kin[$field]) : 'Not provided') ?></span></div><?php endforeach; ?>
+            </div><?php endforeach; ?>
+          <?php endif; ?>
+        </div></details>
+        <details class="profile-accordion"><summary>Documents</summary><div class="profile-accordion-body"><div class="profile-section-grid">
+          <?php foreach ($profileDocuments as $field => [$label, $type]): ?><div class="profile-section-item"><span class="profile-label"><?= e($label) ?></span><span class="profile-value"><?php if (!empty($member[$field])): ?><a href="document.php?type=<?= e($type) ?>" target="_blank" rel="noopener">View file</a><?php else: ?>Not uploaded<?php endif; ?></span></div><?php endforeach; ?>
+        </div></div></details>
       <?php endif; ?>
 
       <?php if ($activeTab === 'password'): ?>
