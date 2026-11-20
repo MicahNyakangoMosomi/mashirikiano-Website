@@ -31,7 +31,7 @@ $recoveryRate   = ($disbursedTotal > 0) ? round(($repaidTotal / $disbursedTotal)
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-4" rel="stylesheet">
+  <link href="admin.css?v=20261120-5" rel="stylesheet">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 

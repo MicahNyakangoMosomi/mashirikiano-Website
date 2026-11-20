@@ -77,7 +77,7 @@ $jobs = $pdo->query("SELECT * FROM jobs ORDER BY job_deadline ASC")->fetchAll();
     <title>Manage Jobs | Admin</title>
     <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="../assets/css/main.css" rel="stylesheet">
-    <link href="admin.css" rel="stylesheet">
+    <link href="admin.css?v=20261120-5" rel="stylesheet">
     <style>
         .admin-card { background: white; padding: 25px; margin-bottom: 30px; }
     </style>

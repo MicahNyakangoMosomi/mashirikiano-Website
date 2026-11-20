@@ -60,7 +60,7 @@ foreach ($checks as $check) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin Health Check | Mashirikiano SACCO</title>
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css" rel="stylesheet">
+  <link href="admin.css?v=20261120-5" rel="stylesheet">
 </head>
 <body>
   <?php admin_header('members', 'System health check'); ?>
