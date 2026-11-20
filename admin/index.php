@@ -59,6 +59,15 @@ function moneyShort(float $amount): string
     return number_format($amount, 0);
 }
 
+function moneyAxisLabel(float $amount): string
+{
+    if (abs($amount) < 1000) {
+        return number_format($amount, abs($amount) < 10 ? 1 : 0);
+    }
+
+    return moneyShort($amount);
+}
+
 function monthBuckets(): array
 {
     $months = [];
@@ -71,6 +80,7 @@ function monthBuckets(): array
             'label' => $start->format('M'),
             'members' => 0,
             'savings' => 0.0,
+            'withdrawals' => 0.0,
             'loans' => 0.0,
         ];
         $start->modify('+1 month');
@@ -91,55 +101,148 @@ function hydrateMonthly(PDO $pdo, array $months, string $sql, string $valueKey, 
     return $months;
 }
 
-function barChart(array $months, string $key, string $color): string
+function chartScale(float $maximum, int $steps = 4, bool $integerValues = false): array
 {
-    $max = 0.0;
-    foreach ($months as $month) {
-        $max = max($max, (float)$month[$key]);
+    $maximum = max(1, $maximum);
+    $rawStep = $maximum / max(1, $steps);
+    $magnitude = pow(10, floor(log10($rawStep)));
+    $fraction = $rawStep / $magnitude;
+    $step = ($fraction <= 1 ? 1 : ($fraction <= 2 ? 2 : ($fraction <= 5 ? 5 : 10))) * $magnitude;
+    if ($integerValues) {
+        $step = max(1, ceil($step));
     }
-    $max = max($max, 1);
+    $scaleMaximum = $integerValues
+        ? max($maximum, ceil($maximum / $step) * $step)
+        : max($step * $steps, ceil($maximum / $step) * $step);
+    $tickCount = (int)round($scaleMaximum / $step);
+    $ticks = [];
+    for ($index = 0; $index <= $tickCount; $index++) {
+        $ticks[] = $index * $step;
+    }
+
+    return ['max' => $scaleMaximum, 'ticks' => $ticks];
+}
+
+function barChart(array $months, string $key, string $color, string $unitLabel): string
+{
+    $maximum = max(array_map(static fn(array $month): float => (float)$month[$key], array_values($months)) ?: [0.0]);
+    $scale = chartScale($maximum, 4, true);
+    $width = 780;
+    $height = 300;
+    $left = 66;
+    $right = 16;
+    $top = 20;
+    $bottom = 48;
+    $plotWidth = $width - $left - $right;
+    $plotHeight = $height - $top - $bottom;
+    $count = max(1, count($months));
+    $slotWidth = $plotWidth / $count;
 
     ob_start(); ?>
-      <div class="admin-bars">
-        <?php foreach ($months as $month): ?>
-          <?php $height = max(6, ((float)$month[$key] / $max) * 132); ?>
-          <div class="admin-bar-wrap">
-            <div class="admin-bar" style="height: <?= e(number_format($height, 2, '.', '')) ?>px; background: <?= e($color) ?>;"></div>
-            <span><?= e($month['label']) ?></span>
-          </div>
+      <svg class="analysis-chart" viewBox="0 0 <?= $width ?> <?= $height ?>" role="img" aria-label="<?= e($unitLabel) ?> by month for the last 12 months">
+        <?php foreach ($scale['ticks'] as $tick): ?>
+          <?php $y = $top + $plotHeight - (($tick / $scale['max']) * $plotHeight); ?>
+          <line class="chart-gridline" x1="<?= $left ?>" y1="<?= e(number_format($y, 2, '.', '')) ?>" x2="<?= $width - $right ?>" y2="<?= e(number_format($y, 2, '.', '')) ?>" />
+          <text class="chart-tick" x="<?= $left - 10 ?>" y="<?= e(number_format($y + 4, 2, '.', '')) ?>" text-anchor="end"><?= e(number_format((float)$tick)) ?></text>
         <?php endforeach; ?>
-      </div>
+        <line class="chart-axis" x1="<?= $left ?>" y1="<?= $top ?>" x2="<?= $left ?>" y2="<?= $top + $plotHeight ?>" />
+        <line class="chart-axis" x1="<?= $left ?>" y1="<?= $top + $plotHeight ?>" x2="<?= $width - $right ?>" y2="<?= $top + $plotHeight ?>" />
+        <text class="chart-axis-title" transform="translate(17 <?= $top + ($plotHeight / 2) ?>) rotate(-90)" text-anchor="middle"><?= e($unitLabel) ?></text>
+        <?php foreach (array_values($months) as $index => $month): ?>
+          <?php
+            $value = (float)$month[$key];
+            $barHeight = ($value / $scale['max']) * $plotHeight;
+            $x = $left + ($slotWidth * $index) + ($slotWidth * .22);
+            $barWidth = $slotWidth * .56;
+            $y = $top + $plotHeight - $barHeight;
+            $centerX = $x + ($barWidth / 2);
+          ?>
+          <rect x="<?= e(number_format($x, 2, '.', '')) ?>" y="<?= e(number_format($y, 2, '.', '')) ?>" width="<?= e(number_format($barWidth, 2, '.', '')) ?>" height="<?= e(number_format(max(1, $barHeight), 2, '.', '')) ?>" rx="3" fill="<?= e($color) ?>">
+            <title><?= e($month['label']) ?>: <?= e(number_format($value)) ?> <?= e(strtolower($unitLabel)) ?></title>
+          </rect>
+          <text class="chart-tick" x="<?= e(number_format($centerX, 2, '.', '')) ?>" y="<?= $height - 18 ?>" text-anchor="middle"><?= e($month['label']) ?></text>
+          <?php if ($value > 0): ?><text class="chart-value" x="<?= e(number_format($centerX, 2, '.', '')) ?>" y="<?= e(number_format(max($top + 11, $y - 6), 2, '.', '')) ?>" text-anchor="middle"><?= e(number_format($value)) ?></text><?php endif; ?>
+        <?php endforeach; ?>
+      </svg>
     <?php return trim((string)ob_get_clean());
 }
 
-function lineChart(array $months, string $firstKey, string $secondKey): string
+function lineChart(array $months, array $series): string
 {
-    $width = 640;
-    $height = 220;
-    $pad = 26;
-    $max = 1.0;
+    $width = 860;
+    $height = 330;
+    $left = 82;
+    $right = 20;
+    $top = 22;
+    $bottom = 54;
+    $maximum = 0.0;
     foreach ($months as $month) {
-        $max = max($max, (float)$month[$firstKey], (float)$month[$secondKey]);
+        foreach ($series as $item) {
+            $maximum = max($maximum, (float)$month[$item['key']]);
+        }
     }
+    $scale = chartScale($maximum);
+    $plotWidth = $width - $left - $right;
+    $plotHeight = $height - $top - $bottom;
 
-    $pointsA = [];
-    $pointsB = [];
     $labels = array_values($months);
     $count = max(1, count($labels) - 1);
-    foreach ($labels as $index => $month) {
-        $x = $pad + (($width - ($pad * 2)) * ($index / $count));
-        $yA = $height - $pad - (((float)$month[$firstKey] / $max) * ($height - ($pad * 2)));
-        $yB = $height - $pad - (((float)$month[$secondKey] / $max) * ($height - ($pad * 2)));
-        $pointsA[] = number_format($x, 2, '.', '') . ',' . number_format($yA, 2, '.', '');
-        $pointsB[] = number_format($x, 2, '.', '') . ',' . number_format($yB, 2, '.', '');
-    }
 
     ob_start(); ?>
-      <svg class="admin-line-chart" viewBox="0 0 <?= $width ?> <?= $height ?>" role="img" aria-label="Savings and loan trend">
-        <line x1="<?= $pad ?>" y1="<?= $height - $pad ?>" x2="<?= $width - $pad ?>" y2="<?= $height - $pad ?>" />
-        <line x1="<?= $pad ?>" y1="<?= $pad ?>" x2="<?= $pad ?>" y2="<?= $height - $pad ?>" />
-        <polyline class="savings-line" points="<?= e(implode(' ', $pointsA)) ?>" />
-        <polyline class="loans-line" points="<?= e(implode(' ', $pointsB)) ?>" />
+      <svg class="analysis-chart" viewBox="0 0 <?= $width ?> <?= $height ?>" role="img" aria-label="Monthly contributions, withdrawals, and loan disbursements in Kenyan shillings">
+        <?php foreach ($scale['ticks'] as $tick): ?>
+          <?php $y = $top + $plotHeight - (($tick / $scale['max']) * $plotHeight); ?>
+          <line class="chart-gridline" x1="<?= $left ?>" y1="<?= e(number_format($y, 2, '.', '')) ?>" x2="<?= $width - $right ?>" y2="<?= e(number_format($y, 2, '.', '')) ?>" />
+          <text class="chart-tick" x="<?= $left - 10 ?>" y="<?= e(number_format($y + 4, 2, '.', '')) ?>" text-anchor="end"><?= e(moneyAxisLabel((float)$tick)) ?></text>
+        <?php endforeach; ?>
+        <line class="chart-axis" x1="<?= $left ?>" y1="<?= $top ?>" x2="<?= $left ?>" y2="<?= $top + $plotHeight ?>" />
+        <line class="chart-axis" x1="<?= $left ?>" y1="<?= $top + $plotHeight ?>" x2="<?= $width - $right ?>" y2="<?= $top + $plotHeight ?>" />
+        <text class="chart-axis-title" transform="translate(17 <?= $top + ($plotHeight / 2) ?>) rotate(-90)" text-anchor="middle">Amount (KES)</text>
+        <?php foreach ($labels as $index => $month): ?>
+          <?php $x = $left + ($plotWidth * ($index / $count)); ?>
+          <text class="chart-tick" x="<?= e(number_format($x, 2, '.', '')) ?>" y="<?= $height - 18 ?>" text-anchor="middle"><?= e($month['label']) ?></text>
+        <?php endforeach; ?>
+        <?php foreach ($series as $item): ?>
+          <?php
+            $points = [];
+            foreach ($labels as $index => $month) {
+                $x = $left + ($plotWidth * ($index / $count));
+                $y = $top + $plotHeight - (((float)$month[$item['key']] / $scale['max']) * $plotHeight);
+                $points[] = [number_format($x, 2, '.', ''), number_format($y, 2, '.', ''), (float)$month[$item['key']], $month['label']];
+            }
+          ?>
+          <polyline class="chart-series" points="<?= e(implode(' ', array_map(static fn(array $point): string => $point[0] . ',' . $point[1], $points))) ?>" stroke="<?= e($item['color']) ?>" />
+          <?php foreach ($points as [$x, $y, $value, $label]): ?>
+            <circle cx="<?= e($x) ?>" cy="<?= e($y) ?>" r="4" fill="<?= e($item['color']) ?>"><title><?= e($item['label']) ?> — <?= e($label) ?>: KES <?= e(number_format($value, 2)) ?></title></circle>
+          <?php endforeach; ?>
+        <?php endforeach; ?>
+      </svg>
+    <?php return trim((string)ob_get_clean());
+}
+
+function donutChart(array $segments, string $centerValue, string $centerLabel, string $ariaLabel): string
+{
+    $total = array_sum(array_map(static fn(array $segment): float => max(0, (float)$segment['value']), $segments));
+    $radius = 74;
+    $circumference = 2 * M_PI * $radius;
+    $offset = 0.0;
+
+    ob_start(); ?>
+      <svg class="donut-chart" viewBox="0 0 220 220" role="img" aria-label="<?= e($ariaLabel) ?>">
+        <g transform="rotate(-90 110 110)">
+          <?php if ($total <= 0): ?><circle cx="110" cy="110" r="<?= $radius ?>" fill="none" stroke="#d9e0e8" stroke-width="28" /><?php endif; ?>
+          <?php foreach ($segments as $segment): ?>
+            <?php
+              $value = max(0, (float)$segment['value']);
+              $length = $total > 0 ? ($value / $total) * $circumference : 0;
+              $dashOffset = -$offset;
+              $offset += $length;
+            ?>
+            <?php if ($length > 0): ?><circle cx="110" cy="110" r="<?= $radius ?>" fill="none" stroke="<?= e($segment['color']) ?>" stroke-width="28" stroke-dasharray="<?= e(number_format($length, 2, '.', '')) ?> <?= e(number_format($circumference - $length, 2, '.', '')) ?>" stroke-dashoffset="<?= e(number_format($dashOffset, 2, '.', '')) ?>"><title><?= e($segment['label']) ?>: <?= e(number_format($value)) ?> (<?= e(number_format(($value / $total) * 100, 1)) ?>%)</title></circle><?php endif; ?>
+          <?php endforeach; ?>
+        </g>
+        <text class="donut-center-value" x="110" y="104" text-anchor="middle"><?= e($centerValue) ?></text>
+        <text class="donut-center-label" x="110" y="128" text-anchor="middle"><?= e($centerLabel) ?></text>
       </svg>
     <?php return trim((string)ob_get_clean());
 }
@@ -151,6 +254,16 @@ $memberStats = $pdo->query(
         SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END) AS PendingMembers
      FROM members"
 )->fetch() ?: [];
+
+$memberStatusStats = ['Active' => 0, 'Pending' => 0, 'Suspended' => 0, 'Deleted' => 0];
+try {
+    foreach ($pdo->query('SELECT Status, COUNT(*) AS Members FROM members GROUP BY Status')->fetchAll() as $statusRow) {
+        $status = (string)$statusRow['Status'];
+        if (array_key_exists($status, $memberStatusStats)) {
+            $memberStatusStats[$status] = (int)$statusRow['Members'];
+        }
+    }
+} catch (Throwable $e) {}
 
 $transactionStats = $pdo->query(
     "SELECT
@@ -171,6 +284,11 @@ $loanStats = [
     'ActiveLoans'        => 0,
     'LoanPortfolio'      => 0.0,
     'ThisMonthDisbursed' => 0.0,
+];
+$loanStatusStats = [
+    'ACTIVE' => ['count' => 0, 'balance' => 0.0],
+    'IN_ARREARS' => ['count' => 0, 'balance' => 0.0],
+    'CLOSED' => ['count' => 0, 'balance' => 0.0],
 ];
 
 try {
@@ -196,6 +314,19 @@ try {
     $loanStats['ActiveLoans']        = (int)($activeStats['ActiveLoans'] ?? 0);
     $loanStats['LoanPortfolio']      = (float)($activeStats['LoanPortfolio'] ?? 0);
     $loanStats['ThisMonthDisbursed'] = (float)($activeStats['ThisMonthDisbursed'] ?? 0);
+
+    $statusStmt = $pdo->query(
+        "SELECT UPPER(loanStatus) AS LoanStatus, COUNT(*) AS LoanCount,
+                COALESCE(SUM(principalBalance), 0) AS PrincipalBalance
+         FROM active_loan GROUP BY UPPER(loanStatus)"
+    );
+    foreach ($statusStmt->fetchAll() as $statusRow) {
+        $status = (string)$statusRow['LoanStatus'];
+        $loanStatusStats[$status] = [
+            'count' => (int)$statusRow['LoanCount'],
+            'balance' => (float)$statusRow['PrincipalBalance'],
+        ];
+    }
 } catch (Throwable $e) {
     // Keep dashboard loan totals at zero if the loan engine tables are unavailable.
 }
@@ -240,7 +371,7 @@ if ($totalAkiba > 0 || $totalUshirika > 0) {
     $netSavings = max(0.0, $totalContributing - $totalWithdrawals);
 }
 
-$withdrawalRate = $totalContributing > 0 ? min(100, ($totalWithdrawals / $totalContributing) * 100) : 0;
+$withdrawalRate = $totalContributing > 0 ? ($totalWithdrawals / $totalContributing) * 100 : null;
 $entranceFeesReserve = (float)($depositStats['EntranceFeesReserve'] ?? 0);
 $shareCapital = $entranceFeesReserve;
 $activeLoans = (int)($loanStats['ActiveLoans'] ?? 0);
@@ -248,7 +379,7 @@ $loanPortfolio = (float)($loanStats['LoanPortfolio'] ?? 0);
 $pendingLoans = (int)($loanStats['PendingLoans'] ?? 0);
 $thisMonthSavings = (float)($transactionStats['ThisMonthSavings'] ?? 0);
 $thisMonthDisbursed = (float)($loanStats['ThisMonthDisbursed'] ?? 0);
-$coverageRate = $loanPortfolio > 0 ? min(999, ($netSavings / $loanPortfolio) * 100) : 0;
+$coverageRate = $loanPortfolio > 0 ? ($netSavings / $loanPortfolio) * 100 : null;
 $activeMemberRate = $totalMembers > 0 ? ($activeMembers / $totalMembers) * 100 : 0;
 
 $months = monthBuckets();
@@ -272,6 +403,17 @@ $months = hydrateMonthly(
     'savings',
     true
 );
+$months = hydrateMonthly(
+    $pdo,
+    $months,
+    "SELECT DATE_FORMAT(COALESCE(TranTime, CreatedAt), '%Y-%m') AS MonthKey, COALESCE(SUM(Amount), 0) AS Value
+     FROM member_transactions
+     WHERE TransactionType = 'withdrawal'
+       AND COALESCE(TranTime, CreatedAt) >= DATE_FORMAT(DATE_SUB(CURRENT_DATE(), INTERVAL 11 MONTH), '%Y-%m-01')
+     GROUP BY DATE_FORMAT(COALESCE(TranTime, CreatedAt), '%Y-%m')",
+    'withdrawals',
+    true
+);
 try {
     $months = hydrateMonthly(
         $pdo,
@@ -286,6 +428,24 @@ try {
 } catch (Throwable $e) {
     // Leave loan chart values empty if the loan engine table is unavailable.
 }
+
+$memberSegments = [
+    ['label' => 'Active', 'value' => $memberStatusStats['Active'], 'color' => '#218c74'],
+    ['label' => 'Pending', 'value' => $memberStatusStats['Pending'], 'color' => '#f97316'],
+    ['label' => 'Suspended', 'value' => $memberStatusStats['Suspended'], 'color' => '#dc3545'],
+    ['label' => 'Deleted', 'value' => $memberStatusStats['Deleted'], 'color' => '#98a2b3'],
+];
+$loanPortfolioSegments = [
+    ['label' => 'Active', 'value' => $loanStatusStats['ACTIVE']['balance'], 'count' => $loanStatusStats['ACTIVE']['count'], 'color' => '#1d72d2'],
+    ['label' => 'In arrears', 'value' => $loanStatusStats['IN_ARREARS']['balance'], 'count' => $loanStatusStats['IN_ARREARS']['count'], 'color' => '#dc3545'],
+];
+$savingsSegments = [
+    ['label' => 'Akiba net savings', 'value' => $netSavings, 'color' => '#e47001'],
+    ['label' => 'Ushirika shares', 'value' => $totalUshirika, 'color' => '#489a12'],
+];
+$totalLoanRequests = (int)($loanStats['TotalLoanRequests'] ?? 0);
+$pendingLoanRate = $totalLoanRequests > 0 ? ($pendingLoans / $totalLoanRequests) * 100 : null;
+$memberFundTotal = $netSavings + $totalUshirika;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -295,7 +455,7 @@ try {
   <title>Admin Dashboard | Mashirikiano SACCO</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-6" rel="stylesheet">
+  <link href="admin.css?v=20261120-7" rel="stylesheet">
   <style>
     .bi-hero {
       background: #28309a;
@@ -355,46 +515,17 @@ try {
       font-weight: 800;
       margin: 0;
     }
-    .admin-bars {
-      height: 190px;
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      align-items: end;
-      gap: 10px;
-      padding-top: 22px;
-    }
-    .admin-bar-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: end;
-      height: 100%;
-      gap: 8px;
-      color: #7a8699;
-      font-size: .72rem;
-      font-weight: 700;
-    }
-    .admin-bar {
-      width: min(28px, 90%);
-      border-radius: 6px 6px 0 0;
-      box-shadow: inset 0 1px rgba(255,255,255,.25);
-    }
-    .admin-line-chart {
-      width: 100%;
-      min-height: 220px;
-    }
-    .admin-line-chart line {
-      stroke: #d8e0ea;
-      stroke-width: 2;
-    }
-    .admin-line-chart polyline {
-      fill: none;
-      stroke-width: 5;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    .savings-line { stroke: #218c74; }
-    .loans-line { stroke: #f97316; }
+    .analysis-chart { display:block; width:100%; height:auto; overflow:visible; }
+    .chart-gridline { stroke:#e5eaf0; stroke-width:1; }
+    .chart-axis { stroke:#8290a2; stroke-width:1.5; }
+    .chart-tick { fill:#667085; font-size:12px; font-family:inherit; }
+    .chart-axis-title { fill:#475467; font-size:12px; font-weight:700; font-family:inherit; }
+    .chart-value { fill:#475467; font-size:10px; font-weight:700; font-family:inherit; }
+    .chart-series { fill:none; stroke-width:3.5; stroke-linecap:round; stroke-linejoin:round; }
+    .donut-layout { display:flex; align-items:center; justify-content:center; gap:28px; min-height:280px; }
+    .donut-chart { width:min(230px, 48%); height:auto; flex:0 0 auto; }
+    .donut-center-value { fill:#10253a; font-size:22px; font-weight:900; font-family:inherit; }
+    .donut-center-label { fill:#667085; font-size:11px; font-weight:700; font-family:inherit; }
     .chart-legend {
       display: flex;
       flex-wrap: wrap;
@@ -403,6 +534,10 @@ try {
       font-size: .82rem;
       font-weight: 700;
     }
+    .chart-legend.stacked { flex-direction:column; gap:12px; min-width:155px; }
+    .chart-legend-item { display:flex; align-items:flex-start; gap:8px; }
+    .chart-legend-copy { display:flex; flex-direction:column; gap:2px; }
+    .chart-legend-value { color:#344054; font-size:.78rem; font-weight:600; }
     .legend-dot {
       width: 12px;
       height: 12px;
@@ -411,13 +546,20 @@ try {
       margin-right: 6px;
       vertical-align: -1px;
     }
+    .analysis-note { color:#667085; font-size:.8rem; margin-top:10px; }
+    .decision-card { border-left:4px solid #1d72d2; border-radius:6px; background:#f7f9fc; padding:14px; height:100%; }
+    .decision-label { color:#667085; font-size:.72rem; font-weight:800; text-transform:uppercase; }
+    .decision-value { color:#10253a; font-size:1.35rem; font-weight:900; margin:.2rem 0; }
+    .decision-note { color:#667085; font-size:.78rem; margin:0; }
     @media (max-width: 1200px) {
       .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 767px) {
       .metric-grid { grid-template-columns: 1fr; }
       .bi-hero { padding: 18px; }
-      .admin-bars { gap: 5px; }
+      .donut-layout { flex-direction:column; gap:12px; }
+      .donut-chart { width:min(220px, 80%); }
+      .chart-legend.stacked { width:100%; }
     }
   </style>
 </head>
@@ -426,8 +568,8 @@ try {
 
   <main class="container-fluid admin-shell py-4">
     <section class="bi-hero mb-4">
-      <h1>Business Intelligence Dashboard</h1>
-      <p>Executive overview of SACCO performance metrics as at <?= e(date('d M Y H:i')) ?></p>
+      <h1>SACCO Performance &amp; Decision Analysis</h1>
+      <p>Financial, membership, and lending trends as at <?= e(date('d M Y H:i')) ?></p>
     </section>
 
     <section class="metric-grid mb-4">
@@ -468,7 +610,7 @@ try {
       </div>
       <div class="bi-metric">
         <div class="bi-metric-label">Savings Cover</div>
-        <div class="bi-metric-value"><?= number_format($coverageRate, 1) ?>%</div>
+        <div class="bi-metric-value"><?= $coverageRate === null ? 'N/A' : number_format($coverageRate, 1) . '%' ?></div>
         <div class="bi-metric-note">Savings compared with approved loans</div>
       </div>
       <div class="bi-metric red">
@@ -484,52 +626,90 @@ try {
     </section>
 
     <div class="row g-4">
-      <section class="col-xl-5">
-        <div class="card chart-card h-100">
-          <div class="card-body">
-            <h2>Membership Growth (12 Months)</h2>
-            <?= barChart($months, 'members', '#27339a') ?>
-          </div>
-        </div>
+      <section class="col-xl-6">
+        <div class="card chart-card h-100"><div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h2>New Member Registrations by Month</h2><div class="chart-legend"><span><span class="legend-dot" style="background:#27339a;"></span>New registrations</span></div></div>
+          <p class="analysis-note">Monthly member accounts created over the last 12 months. Vertical scale: members.</p>
+          <?= barChart($months, 'members', '#27339a', 'Members') ?>
+        </div></div>
       </section>
-      <section class="col-xl-7">
-        <div class="card chart-card h-100">
-          <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
-              <h2>Savings and Loan Disbursements (12 Months)</h2>
-              <div class="chart-legend">
-                <span><span class="legend-dot" style="background:#218c74;"></span>Contributions</span>
-                <span><span class="legend-dot" style="background:#f97316;"></span>Loans</span>
-              </div>
+      <section class="col-xl-6">
+        <div class="card chart-card h-100"><div class="card-body">
+          <h2>Current Membership Status</h2>
+          <p class="analysis-note">Member count by current account status; percentages are of all members.</p>
+          <div class="donut-layout">
+            <?= donutChart($memberSegments, number_format($totalMembers), 'members', 'Member status breakdown') ?>
+            <div class="chart-legend stacked">
+              <?php foreach ($memberSegments as $segment): ?>
+                <?php $share = $totalMembers > 0 ? ((float)$segment['value'] / $totalMembers) * 100 : 0; ?>
+                <div class="chart-legend-item"><span class="legend-dot" style="background:<?= e($segment['color']) ?>;"></span><span class="chart-legend-copy"><span><?= e($segment['label']) ?></span><span class="chart-legend-value"><?= number_format((int)$segment['value']) ?> members · <?= number_format($share, 1) ?>%</span></span></div>
+              <?php endforeach; ?>
             </div>
-            <?= lineChart($months, 'savings', 'loans') ?>
           </div>
-        </div>
+        </div></div>
       </section>
     </div>
 
-    <section class="card chart-card mt-4">
-      <div class="card-body">
-        <h2 class="mb-3">Savings Position Analysis</h2>
-        <div class="row g-3">
-          <div class="col-md-4">
-            <div class="text-muted small">Total Withdrawals</div>
-            <div class="h4 fw-bold mb-1"><?= e(moneyShort($totalWithdrawals)) ?></div>
-            <div class="text-muted small">Cash released from contributions</div>
-          </div>
-          <div class="col-md-4">
-            <div class="text-muted small">Savings Retained</div>
-            <div class="h4 fw-bold mb-1"><?= number_format(max(0, 100 - $withdrawalRate), 1) ?>%</div>
-            <div class="text-muted small">Share of contributions still retained</div>
-          </div>
-          <div class="col-md-4">
-            <div class="text-muted small">Withdrawal Rate</div>
-            <div class="h4 fw-bold mb-1"><?= number_format($withdrawalRate, 1) ?>%</div>
-            <div class="text-muted small">Withdrawals compared with contributions</div>
-          </div>
+    <section class="card chart-card mt-4"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between gap-3 mb-2">
+        <h2>Monthly SACCO Cash Flows</h2>
+        <div class="chart-legend">
+          <span><span class="legend-dot" style="background:#218c74;"></span>Contributions</span>
+          <span><span class="legend-dot" style="background:#dc3545;"></span>Withdrawals</span>
+          <span><span class="legend-dot" style="background:#f97316;"></span>Loan disbursements</span>
         </div>
       </div>
-    </section>
+      <p class="analysis-note">Monthly transaction totals for the last 12 months. Vertical scale: KES. Hover chart points for exact values.</p>
+      <?= lineChart($months, [
+          ['key' => 'savings', 'label' => 'Contributions', 'color' => '#218c74'],
+          ['key' => 'withdrawals', 'label' => 'Withdrawals', 'color' => '#dc3545'],
+          ['key' => 'loans', 'label' => 'Loan disbursements', 'color' => '#f97316'],
+      ]) ?>
+    </div></section>
+
+    <div class="row g-4 mt-0">
+      <section class="col-xl-6">
+        <div class="card chart-card h-100"><div class="card-body">
+          <h2>Outstanding Loan Principal by Status</h2>
+          <p class="analysis-note">Principal balance distribution for currently active and in-arrears loans. Shares use outstanding principal.</p>
+          <div class="donut-layout">
+            <?= donutChart($loanPortfolioSegments, moneyShort($loanPortfolio), 'KES principal', 'Outstanding principal by loan status') ?>
+            <div class="chart-legend stacked">
+              <?php foreach ($loanPortfolioSegments as $segment): ?>
+                <?php $share = $loanPortfolio > 0 ? ((float)$segment['value'] / $loanPortfolio) * 100 : 0; ?>
+                <div class="chart-legend-item"><span class="legend-dot" style="background:<?= e($segment['color']) ?>;"></span><span class="chart-legend-copy"><span><?= e($segment['label']) ?></span><span class="chart-legend-value"><?= number_format((int)$segment['count']) ?> loans · KES <?= number_format((float)$segment['value'], 2) ?> · <?= number_format($share, 1) ?>%</span></span></div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </div></div>
+      </section>
+      <section class="col-xl-6">
+        <div class="card chart-card h-100"><div class="card-body">
+          <h2>Member Savings Composition</h2>
+          <p class="analysis-note">Current net Akiba savings and Ushirika shares. Each slice shows its share of total member funds.</p>
+          <div class="donut-layout">
+            <?= donutChart($savingsSegments, moneyShort($memberFundTotal), 'KES member funds', 'Member funds split between net Akiba savings and Ushirika shares') ?>
+            <div class="chart-legend stacked">
+              <?php foreach ($savingsSegments as $segment): ?>
+                <?php $share = $memberFundTotal > 0 ? ((float)$segment['value'] / $memberFundTotal) * 100 : 0; ?>
+                <div class="chart-legend-item"><span class="legend-dot" style="background:<?= e($segment['color']) ?>;"></span><span class="chart-legend-copy"><span><?= e($segment['label']) ?></span><span class="chart-legend-value">KES <?= number_format((float)$segment['value'], 2) ?> · <?= number_format($share, 1) ?>%</span></span></div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </div></div>
+      </section>
+    </div>
+
+    <section class="card chart-card mt-4"><div class="card-body">
+      <h2 class="mb-3">Decision Indicators</h2>
+      <div class="row g-3">
+        <div class="col-md-6 col-xl-3"><div class="decision-card"><div class="decision-label">Active member rate</div><div class="decision-value"><?= number_format($activeMemberRate, 1) ?>%</div><p class="decision-note"><?= number_format($activeMembers) ?> active of <?= number_format($totalMembers) ?> total members.</p></div></div>
+        <div class="col-md-6 col-xl-3"><div class="decision-card"><div class="decision-label">Withdrawal rate</div><div class="decision-value"><?= $withdrawalRate === null ? 'N/A' : number_format($withdrawalRate, 1) . '%' ?></div><p class="decision-note">Total withdrawals divided by lifetime contributions<?= $totalContributing <= 0 ? '; no contribution base recorded' : '' ?>.</p></div></div>
+        <div class="col-md-6 col-xl-3"><div class="decision-card"><div class="decision-label">Savings cover</div><div class="decision-value"><?= $coverageRate === null ? 'N/A' : number_format($coverageRate, 1) . '%' ?></div><p class="decision-note">Net Akiba savings divided by outstanding loan principal<?= $loanPortfolio <= 0 ? '; no current principal balance' : '' ?>.</p></div></div>
+        <div class="col-md-6 col-xl-3"><div class="decision-card"><div class="decision-label">Pending loan requests</div><div class="decision-value"><?= number_format($pendingLoans) ?></div><p class="decision-note"><?= $pendingLoanRate === null ? 'N/A' : number_format($pendingLoanRate, 1) . '%' ?> of <?= number_format($totalLoanRequests) ?> recorded loan applications are pending.</p></div></div>
+      </div>
+      <p class="analysis-note mb-0">These indicators summarize current recorded balances and transaction history; they are descriptive measures, not policy thresholds.</p>
+    </div></section>
   </main>
 </body>
 </html>
