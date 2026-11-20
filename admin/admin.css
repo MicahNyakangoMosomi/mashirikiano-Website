@@ -392,8 +392,12 @@ body.admin-sidebar-collapsed .admin-nav-arrow {
   white-space: nowrap;
 }
 
-.admin-shell .table tbody td {
+.admin-shell .table tbody tr > * {
   background: transparent !important;
+  box-shadow: none !important;
+}
+
+.admin-shell .table tbody td {
   border-bottom: 1px solid #d8dee8;
   padding: .65rem .5rem;
 }

@@ -201,7 +201,7 @@ $products = $pdo->query("SELECT * FROM `loan` ORDER BY `loanID` DESC")->fetchAll
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="../assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="admin.css" rel="stylesheet">
+  <link href="admin.css?v=20261120-2" rel="stylesheet">
   <style>
     body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; }
     .card-metric { border: none; border-radius: 10px; transition: transform 0.2s; }

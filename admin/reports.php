@@ -262,7 +262,7 @@ function renderPagination(int $currentPage, int $totalPages): string
   <title>Reports | Mashirikiano SACCO Admin</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css" rel="stylesheet">
+  <link href="admin.css?v=20261120-2" rel="stylesheet">
   <style>
     @media (max-width: 767px) { .table { min-width: 1040px; } }
   </style>
