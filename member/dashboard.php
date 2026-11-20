@@ -564,23 +564,26 @@ function dashboardUrl(array $params): string
 
         <div class="row g-3 mb-4">
           <div class="col-md-6">
-            <div class="card metric table-panel h-100">
+            <div class="card metric h-100" style="border-left: 4px solid #087a43;">
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
                 <div>
                   <div class="text-muted small text-uppercase fw-bold">Total Contributions</div>
-                  <div class="h4 fw-bold mb-0">KES <?= number_format($totalContributions, 2) ?></div>
+                  <div class="h3 fw-bold mb-0 text-success">KES <?= number_format($totalContributions, 2) ?></div>
                   <div class="small text-muted" style="font-size:0.75rem;">Cumulative lifetime savings deposits</div>
                 </div>
               </div>
             </div>
           </div>
           <div class="col-md-6">
-            <div class="card metric h-100">
-              <div class="card-body">
-                <div class="text-muted small text-uppercase fw-bold">Active Total Loan Balance</div>
-                <div class="h4 fw-bold mb-0 text-danger">KES <?= number_format($totalLoanBalance, 2) ?></div>
-                <div class="small text-muted" style="font-size:0.75rem;">Outstanding principal & daily accrued interest</div>
+            <div class="card metric h-100" style="border-left: 4px solid #dc3545;">
+              <div class="card-body d-flex align-items-center gap-3">
+                <span class="metric-icon danger"><i class="bi bi-cash-stack"></i></span>
+                <div>
+                  <div class="text-muted small text-uppercase fw-bold">Active Total Loan Balance</div>
+                  <div class="h3 fw-bold mb-0 text-danger">KES <?= number_format($totalLoanBalance, 2) ?></div>
+                  <div class="small text-muted" style="font-size:0.75rem;">Outstanding principal & daily accrued interest</div>
+                </div>
               </div>
             </div>
           </div>
@@ -588,7 +591,7 @@ function dashboardUrl(array $params): string
 
         <div class="row g-4">
           <section class="col-12">
-            <div class="card metric h-100">
+            <div class="card metric table-panel h-100">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center gap-3 mb-2">
                   <h2 class="h5 fw-bold mb-0">Recent Transactions</h2>
