@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/MemberService.php';
@@ -444,13 +444,18 @@ function dashboardUrl(array $params): string
     .profile-accordion { border:1px solid #ccc; margin-bottom:14px; background:#fff; }
     .profile-accordion > summary { cursor:pointer; list-style:none; background:#aaa; color:#fff; font-size:1.25rem; padding:11px; display:flex; justify-content:space-between; align-items:center; }
     .profile-accordion > summary::-webkit-details-marker { display:none; }
-    .profile-accordion > summary::after { content:"−"; width:28px; height:28px; border-radius:50%; background:#fff; color:#9aa1a8; display:grid; place-items:center; line-height:1; }
+    .profile-accordion > summary::after { content:"âˆ’"; width:28px; height:28px; border-radius:50%; background:#fff; color:#9aa1a8; display:grid; place-items:center; line-height:1; }
     .profile-accordion:not([open]) > summary::after { content:"+"; }
     .profile-accordion-body { padding:22px 10px 14px; }
     .profile-section-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px 38px; }
     .profile-section-item { display:grid; grid-template-columns:minmax(150px, 34%) 1fr; gap:10px; }
     .profile-subhead { color:#102b4e; font-size:1.2rem; font-weight:700; margin:0 0 18px; }
     @media (max-width:767px) { .profile-summary-grid,.profile-section-grid { grid-template-columns:1fr; } .profile-summary-item,.profile-section-item { grid-template-columns:38% 1fr; } }
+    .member-data-table { --bs-table-bg:#ededed; --bs-table-color:#26384d; width:100%; margin-bottom:0; }
+    .member-data-table thead th { background:#414449 !important; color:#fff !important; font-weight:700; border-color:#fff; padding:12px 10px; white-space:nowrap; }
+    .member-data-table tbody tr:nth-child(odd) > * { background:#ededed !important; }
+    .member-data-table tbody tr:nth-child(even) > * { background:#e1e1e1 !important; }
+    .member-data-table tbody td { border-color:#fff; padding:14px 10px; vertical-align:middle; }
     .status-pill {
       font-size: 0.76rem;
       font-weight: 700;
@@ -517,26 +522,6 @@ function dashboardUrl(array $params): string
       <!-- TAB 1: DASHBOARD OVERVIEW -->
       <!-- ============================================================== -->
       <?php if ($activeTab === 'dashboard'): ?>
-        <section class="member-hero mb-4">
-          <div class="member-profile-summary">
-            <img class="member-profile-photo" src="../assets/img/default-profile.svg" alt="">
-            <div>
-              <h1 class="member-profile-name"><?= e($member['FirstName'] . ' ' . $member['LastName']) ?></h1>
-              <p class="member-profile-id">Member ID: <?= e($member['MemberID']) ?></p>
-            </div>
-          </div>
-          <div class="profile-detail-grid">
-            <div class="profile-detail">
-              <span class="label">Email</span>
-              <span class="value"><?= e($member['Email'] ?: 'Not provided') ?></span>
-            </div>
-            <div class="profile-detail">
-              <span class="label">ID</span>
-              <span class="value"><?= e($member['NationalID']) ?></span>
-            </div>
-          </div>
-        </section>
-
         <div class="row g-3 mb-4">
           <div class="col-md-6 col-lg-4">
             <div class="card metric h-100" style="border-left: 4px solid #e47001;">
@@ -608,28 +593,27 @@ function dashboardUrl(array $params): string
                   <h2 class="h5 fw-bold mb-0">Recent Transactions</h2>
                   <a class="remarks-link" href="?tab=record">View all</a>
                 </div>
-                <?php foreach ($recentTransactions as $transaction): ?>
-                  <?php
-                    $isWithdrawal = $transaction['TransactionType'] === 'withdrawal';
-                    $isTransfer = ($transaction['TransactionCategory'] ?? '') === 'credit_transfer';
-                    $isLoanRepay = $transaction['TransactionType'] === 'loan_repayment';
-                  ?>
-                  <div class="recent-row">
-                    <span class="recent-icon <?= $isWithdrawal ? 'danger' : ($isTransfer ? 'primary' : ($isLoanRepay ? 'warning' : '')) ?>">
-                      <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : ($isLoanRepay ? 'bi-arrow-clockwise text-warning' : 'bi-arrow-down-left')) ?>"></i>
-                    </span>
-                    <div class="flex-grow-1">
-                      <div class="fw-bold"><?= e($transaction['TranID']) ?></div>
-                      <div class="text-muted small"><?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : ($isLoanRepay ? 'Loan Repayment' : 'Contribution')) ?> &middot; <?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?> &middot; <?= e($transaction['Description'] ?: $transaction['MSISDN']) ?></div>
-                    </div>
-                    <div class="fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?> text-end">
-                      <?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : ($isLoanRepay ? '↺' : '+')) ?> KES <?= number_format((float)$transaction['Amount'], 2) ?>
-                    </div>
-                  </div>
-                <?php endforeach; ?>
-                <?php if (!$recentTransactions): ?>
-                  <div class="text-muted text-center py-3">No transaction records found.</div>
-                <?php endif; ?>
+                <div class="table-responsive">
+                  <table class="table member-data-table align-middle">
+                    <thead><tr><th>Transaction ID</th><th>Date / Time</th><th>Type / Details</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                      <?php foreach ($recentTransactions as $transaction): ?>
+                        <?php
+                          $isWithdrawal = $transaction['TransactionType'] === 'withdrawal';
+                          $isTransfer = ($transaction['TransactionCategory'] ?? '') === 'credit_transfer';
+                          $isLoanRepay = $transaction['TransactionType'] === 'loan_repayment';
+                        ?>
+                        <tr>
+                          <td class="fw-bold"><?= e($transaction['TranID']) ?></td>
+                          <td><?= e($transaction['TranTime'] ?: $transaction['CreatedAt']) ?></td>
+                          <td><span class="fw-semibold"><?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : ($isLoanRepay ? 'Loan Repayment' : 'Contribution')) ?></span><div class="small text-muted"><?= e($transaction['Description'] ?: $transaction['MSISDN']) ?></div></td>
+                          <td class="text-end fw-bold text-nowrap <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?>"><?= $isWithdrawal ? '-' : '+' ?> KES <?= number_format((float)$transaction['Amount'], 2) ?></td>
+                        </tr>
+                      <?php endforeach; ?>
+                      <?php if (!$recentTransactions): ?><tr><td colspan="4" class="text-muted text-center py-3">No transaction records found.</td></tr><?php endif; ?>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
@@ -1062,8 +1046,8 @@ function dashboardUrl(array $params): string
         <div class="card metric">
           <div class="card-body p-0">
             <div class="table-responsive">
-              <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+              <table class="table member-data-table align-middle mb-0">
+                <thead>
                   <tr>
                     <th class="ps-3">Date</th>
                     <th>Loan Type</th>
@@ -1138,7 +1122,7 @@ function dashboardUrl(array $params): string
             </form>
             
             <div class="table-responsive">
-              <table class="table align-middle table-hover">
+              <table class="table member-data-table align-middle">
                 <thead>
                   <tr>
                     <th>TransactionID</th>
@@ -1161,7 +1145,7 @@ function dashboardUrl(array $params): string
                         <i class="bi <?= $isWithdrawal ? 'bi-box-arrow-up-right' : ($isTransfer ? 'bi-arrow-left-right text-primary' : ($isLoanRepay ? 'bi-arrow-clockwise text-warning' : 'bi-arrow-down-left')) ?> me-1" aria-hidden="true"></i>
                         <?= $isWithdrawal ? 'Withdrawal' : ($isTransfer ? 'Credit Transfer' : ($isLoanRepay ? 'Loan Repayment' : 'Contribution')) ?>
                       </td>
-                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?>"><?= $isWithdrawal ? '-' : ($isTransfer ? '↔' : ($isLoanRepay ? '↺' : '+')) ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
+                      <td class="text-end fw-bold <?= $isWithdrawal ? 'text-danger' : ($isTransfer ? 'text-primary' : ($isLoanRepay ? 'text-warning' : 'text-success')) ?>"><?= $isWithdrawal ? '-' : ($isTransfer ? 'â†”' : ($isLoanRepay ? 'â†º' : '+')) ?> KES <?= number_format((float)$row['Amount'], 2) ?></td>
                     </tr>
                   <?php endforeach; ?>
                   <?php if (!$paginatedTransactions): ?>
@@ -1319,3 +1303,4 @@ function dashboardUrl(array $params): string
   </script>
 </body>
 </html>
+
