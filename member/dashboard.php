@@ -451,11 +451,10 @@ function dashboardUrl(array $params): string
     .profile-section-item { display:grid; grid-template-columns:minmax(150px, 34%) 1fr; gap:10px; }
     .profile-subhead { color:#102b4e; font-size:1.2rem; font-weight:700; margin:0 0 18px; }
     @media (max-width:767px) { .profile-summary-grid,.profile-section-grid { grid-template-columns:1fr; } .profile-summary-item,.profile-section-item { grid-template-columns:38% 1fr; } }
-    .member-data-table { --bs-table-bg:#ededed; --bs-table-color:#26384d; width:100%; margin-bottom:0; }
+    .member-data-table { --bs-table-bg:transparent; --bs-table-color:#26384d; width:100%; margin-bottom:0; }
     .member-data-table thead th { background:#414449 !important; color:#fff !important; font-weight:700; border-color:#fff; padding:12px 10px; white-space:nowrap; }
-    .member-data-table tbody tr:nth-child(odd) > * { background:#ededed !important; }
-    .member-data-table tbody tr:nth-child(even) > * { background:#e1e1e1 !important; }
-    .member-data-table tbody td { border-color:#fff; padding:14px 10px; vertical-align:middle; }
+    .member-data-table tbody tr > * { background-color:transparent !important; }
+    .member-data-table tbody td { border-color:#e4e8e6; padding:14px 10px; vertical-align:middle; }
     .status-pill {
       font-size: 0.76rem;
       font-weight: 700;
