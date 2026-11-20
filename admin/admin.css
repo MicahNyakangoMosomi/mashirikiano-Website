@@ -399,6 +399,7 @@ body.admin-sidebar-collapsed .admin-nav-arrow {
 .admin-shell .admin-report-table tbody td {
   border-bottom: 1px solid #d8dee8;
   padding: .65rem .5rem;
+  white-space: nowrap;
 }
 
 .admin-shell .admin-report-table tbody tr:last-child td {

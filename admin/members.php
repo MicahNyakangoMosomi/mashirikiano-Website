@@ -399,7 +399,7 @@ function renderPagination(int $currentPage, int $totalPages): string
   <title>Admin Dashboard | Mashirikiano SACCO</title>
   <link rel="icon" type="image/x-icon" href="../assets/img/logo.png">
   <link href="../assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-  <link href="admin.css?v=20261120-3" rel="stylesheet">
+  <link href="admin.css?v=20261120-4" rel="stylesheet">
   <style>
     .member-id { font-weight: 700; color: #0b3b66; }
     .search-row .form-control, .search-row .form-select { min-height: 44px; }
