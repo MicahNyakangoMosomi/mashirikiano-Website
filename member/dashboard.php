@@ -25,7 +25,49 @@ if ($rawTab === 'loan') {
 } elseif ($rawTab === 'applications') {
     $rawTab = 'progress';
 }
-$activeTab = in_array($rawTab, ['dashboard', 'catalog', 'progress', 'active', 'ledger', 'record'], true) ? $rawTab : 'dashboard';
+$activeTab = in_array($rawTab, ['dashboard', 'catalog', 'progress', 'active', 'ledger', 'record', 'profile', 'password'], true) ? $rawTab : 'dashboard';
+
+if (empty($_SESSION['member_csrf'])) {
+    $_SESSION['member_csrf'] = bin2hex(random_bytes(32));
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_member_password'])) {
+    try {
+        if (!hash_equals((string)$_SESSION['member_csrf'], (string)($_POST['csrf_token'] ?? ''))) {
+            throw new RuntimeException('Your session has expired. Please try again.');
+        }
+        $currentPassword = (string)($_POST['current_password'] ?? '');
+        $newPassword = (string)($_POST['new_password'] ?? '');
+        $confirmPassword = (string)($_POST['confirm_password'] ?? '');
+        $storedPassword = (string)($member['Password'] ?? '');
+        $passwordInfo = password_get_info($storedPassword);
+        $currentMatches = ($passwordInfo['algo'] ?? 0) !== 0
+            ? password_verify($currentPassword, $storedPassword)
+            : hash_equals($storedPassword, $currentPassword);
+        if (!$currentMatches) throw new RuntimeException('The previous password is incorrect.');
+        if (strlen($newPassword) < 8) throw new RuntimeException('The new password must contain at least 8 characters.');
+        if ($newPassword !== $confirmPassword) throw new RuntimeException('The new password and confirmation do not match.');
+        if ($newPassword === $currentPassword) throw new RuntimeException('Choose a new password different from your current password.');
+
+        $updatePassword = $pdo->prepare('UPDATE members SET Password = :password WHERE MemberID = :member_id');
+        $updatePassword->execute([':password' => password_hash($newPassword, PASSWORD_DEFAULT), ':member_id' => $member['MemberID']]);
+        $smsSent = false;
+        try {
+            $smsSent = SmsService::sendSms((string)$member['PrimaryNumber'], 'Dear ' . trim($member['FirstName'] . ' ' . $member['LastName']) . ', your Mashirikiano SACCO member portal password was changed. If you did not make this change, contact us immediately on 0758500557.');
+        } catch (Throwable $smsError) {
+            // The password is already saved; an SMS gateway issue must not report the update as failed.
+        }
+        $_SESSION['flash_message'] = $smsSent
+            ? 'Your password was changed successfully. A confirmation message was sent to your registered phone.'
+            : 'Your password was changed successfully, but the confirmation message could not be sent. Contact support if you did not make this change.';
+        $_SESSION['flash_message_type'] = 'success';
+    } catch (Throwable $error) {
+        $_SESSION['flash_message'] = $error->getMessage();
+        $_SESSION['flash_message_type'] = 'danger';
+    }
+    header('Location: dashboard?tab=password');
+    exit;
+}
 
 // -------------------------------------------------------------
 // Handle Action: Submit Loan Application (View 1)
@@ -381,6 +423,16 @@ function dashboardUrl(array $params): string
     @keyframes spin { 100% { transform: rotate(360deg); } }
     .spin-anim { animation: spin 1s linear infinite; display: inline-block; }
 
+    .account-menu { position: relative; }
+    .account-menu summary { list-style: none; cursor: pointer; display:flex; align-items:center; gap:12px; border:1px solid rgba(255,255,255,.8); border-radius:4px; padding:5px 10px; min-width:220px; }
+    .account-menu summary::-webkit-details-marker { display:none; }
+    .account-avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; background:#fff; }
+    .account-menu[open] .account-dropdown { display:block; }
+    .account-dropdown { display:none; position:absolute; right:0; top:calc(100% + 8px); z-index:1100; width:250px; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.25); border:1px solid #d5d5d5; }
+    .account-dropdown a { display:block; padding:10px 12px; color:#555; text-decoration:none; border-bottom:1px solid #ddd; }
+    .account-dropdown a:last-child { border-bottom:0; }
+    .account-dropdown a:hover { background:#f2f6f3; color:#087a43; }
+    .readonly-profile .form-control { background:#f8faf9; }
     .status-pill {
       font-size: 0.76rem;
       font-weight: 700;
@@ -408,7 +460,18 @@ function dashboardUrl(array $params): string
           <div class="small opacity-75">Member account</div>
         </div>
       </div>
-      <a class="text-white fw-bold text-decoration-none" href="../auth/logout">Logout</a>
+      <details class="account-menu">
+        <summary aria-label="Open member account menu">
+          <img class="account-avatar" src="../assets/img/default-profile.svg" alt="">
+          <span class="fw-bold text-uppercase flex-grow-1"><?= e($member['FirstName'] . ' ' . $member['LastName']) ?></span>
+          <i class="bi bi-chevron-down"></i>
+        </summary>
+        <div class="account-dropdown">
+          <a href="?tab=profile"><i class="bi bi-person me-2"></i>Profile</a>
+          <a href="?tab=password"><i class="bi bi-key me-2"></i>Change Password</a>
+          <a href="../auth/logout"><i class="bi bi-box-arrow-right me-2"></i>Log Out</a>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -1110,6 +1173,63 @@ function dashboardUrl(array $params): string
             <?php endif; ?>
           </div>
         </section>
+      <?php endif; ?>
+
+      <?php if ($activeTab === 'profile'): ?>
+        <?php
+          $kinStmt = $pdo->prepare('SELECT FullName, NationalID, DateOfBirth, Relationship, Phone, Allocation FROM next_of_kin WHERE MemberID = :member_id ORDER BY NextOfKinID');
+          $kinStmt->execute([':member_id' => $member['MemberID']]);
+          $memberKin = $kinStmt->fetchAll();
+          $profileFields = [
+            'MemberID' => 'Member ID', 'FirstName' => 'First name', 'LastName' => 'Last name',
+            'NationalID' => 'National ID', 'PrimaryNumber' => 'Phone number', 'Email' => 'Email',
+            'DateOfBirth' => 'Date of birth', 'Gender' => 'Gender', 'Nationality' => 'Nationality',
+            'MaritalStatus' => 'Marital status', 'PostalAddress' => 'Postal address', 'PhysicalAddress' => 'Physical address',
+            'Profession' => 'Profession', 'Industry' => 'Industry', 'EmployerName' => 'Employer',
+            'StaffPayrollNumber' => 'Payroll number', 'EmploymentPosition' => 'Position',
+            'GrossMonthlyIncome' => 'Gross monthly income', 'BusinessDetails' => 'Business details',
+            'JoiningDate' => 'Joining date', 'CreatedAt' => 'Account created', 'Status' => 'Account status',
+          ];
+          $profileDocuments = [
+            'NationalIDDocument' => ['National ID document', 'id'], 'KRADocument' => ['KRA certificate', 'kra'],
+            'PassportPhoto' => ['Passport photo', 'photo'], 'MembershipForm' => ['Membership form', 'form'],
+          ];
+        ?>
+        <section class="card metric mb-4">
+          <div class="card-body">
+            <h1 class="h3 fw-bold mb-1">Member Profile</h1>
+            <p class="text-muted">Your membership information and uploaded files. All details are view only.</p>
+            <div class="row g-3 readonly-profile">
+              <?php foreach ($profileFields as $field => $label): ?>
+                <div class="col-md-6"><label class="form-label fw-semibold"><?= e($label) ?></label><div class="form-control" aria-readonly="true"><?= e(($member[$field] ?? '') !== '' ? $member[$field] : 'Not provided') ?></div></div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </section>
+        <section class="card metric mb-4"><div class="card-body">
+          <h2 class="h5 fw-bold">Next of Kin</h2>
+          <?php if (!$memberKin): ?><p class="text-muted mb-0">No next of kin information provided.</p>
+          <?php else: ?><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>National ID</th><th>Date of birth</th><th>Relationship</th><th>Phone</th><th>Allocation</th></tr></thead><tbody>
+            <?php foreach ($memberKin as $kin): ?><tr><?php foreach (['FullName','NationalID','DateOfBirth','Relationship','Phone'] as $field): ?><td><?= e($kin[$field] ?: '—') ?></td><?php endforeach; ?><td><?= e($kin['Allocation'] !== null ? $kin['Allocation'] . '%' : '—') ?></td></tr><?php endforeach; ?>
+          </tbody></table></div><?php endif; ?>
+        </div></section>
+        <section class="card metric"><div class="card-body"><h2 class="h5 fw-bold">Uploaded Files</h2><div class="list-group list-group-flush">
+          <?php foreach ($profileDocuments as $field => [$label, $type]): ?><div class="list-group-item d-flex justify-content-between align-items-center gap-3"><span><?= e($label) ?></span><?php if (!empty($member[$field])): ?><a class="btn btn-sm btn-outline-success" href="document.php?type=<?= e($type) ?>" target="_blank" rel="noopener">View file</a><?php else: ?><span class="text-muted">Not uploaded</span><?php endif; ?></div><?php endforeach; ?>
+        </div></div></section>
+      <?php endif; ?>
+
+      <?php if ($activeTab === 'password'): ?>
+        <section class="card metric" style="max-width:650px"><div class="card-body p-4">
+          <h1 class="h3 fw-bold">Change Password</h1>
+          <p class="text-muted">Enter your current password, then choose and confirm a new password.</p>
+          <form method="post" action="dashboard?tab=password" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="<?= e($_SESSION['member_csrf']) ?>">
+            <div class="mb-3"><label class="form-label" for="current_password">Previous password</label><input class="form-control" type="password" id="current_password" name="current_password" autocomplete="current-password" required></div>
+            <div class="mb-3"><label class="form-label" for="new_password">New password</label><input class="form-control" type="password" id="new_password" name="new_password" minlength="8" autocomplete="new-password" required><div class="form-text">Use at least 8 characters.</div></div>
+            <div class="mb-3"><label class="form-label" for="confirm_password">Confirm new password</label><input class="form-control" type="password" id="confirm_password" name="confirm_password" minlength="8" autocomplete="new-password" required></div>
+            <button class="btn btn-success" type="submit" name="change_member_password" value="1">Update Password</button>
+          </form>
+        </div></section>
       <?php endif; ?>
 
     </div>
