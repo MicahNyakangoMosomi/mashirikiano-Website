@@ -453,8 +453,10 @@ function dashboardUrl(array $params): string
     @media (max-width:767px) { .profile-summary-grid,.profile-section-grid { grid-template-columns:1fr; } .profile-summary-item,.profile-section-item { grid-template-columns:38% 1fr; } }
     .member-data-table { --bs-table-bg:transparent; --bs-table-color:#26384d; width:100%; margin-bottom:0; }
     .member-data-table thead th { background:#414449 !important; color:#fff !important; font-weight:700; border-color:#fff; padding:12px 10px; white-space:nowrap; }
-    .member-data-table tbody tr > * { background-color:transparent !important; }
+    .member-data-table tbody tr:nth-child(odd) > * { background:#ededed !important; }
+    .member-data-table tbody tr:nth-child(even) > * { background:#e1e1e1 !important; }
     .member-data-table tbody td { border-color:#e4e8e6; padding:14px 10px; vertical-align:middle; }
+    .table-panel { background:#eef4f0; box-shadow:none; }
     .status-pill {
       font-size: 0.76rem;
       font-weight: 700;
@@ -562,7 +564,7 @@ function dashboardUrl(array $params): string
 
         <div class="row g-3 mb-4">
           <div class="col-md-6">
-            <div class="card metric h-100">
+            <div class="card metric table-panel h-100">
               <div class="card-body d-flex align-items-center gap-3">
                 <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
                 <div>
@@ -1042,7 +1044,7 @@ function dashboardUrl(array $params): string
           </a>
         </div>
 
-        <div class="card metric">
+        <div class="card metric table-panel">
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table member-data-table align-middle mb-0">
@@ -1094,7 +1096,7 @@ function dashboardUrl(array $params): string
       <!-- TAB 6: GENERAL MEMBER TRANSACTIONS RECORD -->
       <!-- ============================================================== -->
       <?php if ($activeTab === 'record'): ?>
-        <section class="card metric">
+        <section class="card metric table-panel">
           <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
               <h3 class="h5 fw-bold mb-0">Member Transaction Records</h3>
