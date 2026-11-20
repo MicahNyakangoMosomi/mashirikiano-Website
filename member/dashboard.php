@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 require_once __DIR__ . '/../classes/Auth.php';
 require_once __DIR__ . '/../classes/MemberService.php';
@@ -1303,4 +1303,3 @@ function dashboardUrl(array $params): string
   </script>
 </body>
 </html>
-
